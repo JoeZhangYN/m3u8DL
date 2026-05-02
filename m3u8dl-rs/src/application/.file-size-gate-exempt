@@ -1,0 +1,3 @@
+application/ holds use cases and orchestration: parser / base_url / m3u8_input mapping /
+segment_fetcher / download_job (orchestrator) / job_registry — each is a distinct workflow
+or workflow-support concern, not a redundancy. Tight cohesion, low coupling.

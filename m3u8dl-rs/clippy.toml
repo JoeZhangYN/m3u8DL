@@ -1,0 +1,9 @@
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+allow-panic-in-tests = true
+
+# strict mode: 异步业务系统 (reqwest + tokio + axum) — 禁 Result::unwrap_or* 防丢 source 链
+disallowed-methods = [
+    { path = "std::result::Result::unwrap_or", reason = "use match for fallback to preserve error source chain" },
+    { path = "std::result::Result::unwrap_or_default", reason = "use match for fallback to preserve error source chain" },
+]

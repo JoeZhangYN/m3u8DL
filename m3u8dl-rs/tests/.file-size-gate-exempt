@@ -1,0 +1,2 @@
+cargo integration tests: each top-level *.rs is a separate test binary by convention.
+the file-size-gate's "≤5 files per dir" rule is for source modules, not test binaries.

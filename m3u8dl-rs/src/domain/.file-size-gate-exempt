@@ -1,0 +1,3 @@
+domain/ holds aggregate roots and value types — error / job / playlist / progress / m3u8_input
+are each a coherent piece of vocabulary. The "≤5 per dir" hint targets cohesion drift; here
+each file is a separate Type from the ubiquitous-language list, no drift.

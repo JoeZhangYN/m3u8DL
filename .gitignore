@@ -1,0 +1,35 @@
+# --- Rust build ---------------------------------------------------------------
+m3u8dl-rs/target/
+**/*.rs.bk
+
+# --- Local config (paths / cookies / per-machine) -----------------------------
+config.txt
+
+# --- Logs (large, per-run) ----------------------------------------------------
+Logs/
+server_logs/
+*.log
+*.jsonl
+
+# --- Local Claude Code workspace ---------------------------------------------
+.claude/
+
+# --- IDE / OS junk -----------------------------------------------------------
+.vscode/
+.idea/
+*.iml
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# --- Binary artifacts (ship via GitHub Releases, not git) ---------------------
+m3u8dl-server.exe
+ffmpeg.exe
+N_m3u8DL-*.exe
+*.pdb
+
+# --- Output dir (in case it ends up under repo) ------------------------------
+Downloads/
+
+# --- Personal reference notes (not part of public docs) -----------------------
+RUST_PORT_REFERENCE.md

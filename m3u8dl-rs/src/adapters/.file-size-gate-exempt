@@ -1,0 +1,3 @@
+adapters/ holds one impl per port (http_client, muxer, progress_sink) plus
+self-contained text-processing helpers (png_strip, m3u8_normalize, aes_decrypt).
+6+ files is the natural shape of a hexagonal adapters layer, not a sign of poor cohesion.

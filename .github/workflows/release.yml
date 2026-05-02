@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            bin_name: m3u8dl-server.exe
+            launcher: start-server.bat
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            bin_name: m3u8dl-server
+            launcher: start-server.sh
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+            bin_name: m3u8dl-server
+            launcher: start-server.sh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: m3u8dl-rs
+
+      - name: Build
+        working-directory: m3u8dl-rs
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          STAGE="m3u8dl-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$STAGE"
+          cp "m3u8dl-rs/target/${{ matrix.target }}/release/${{ matrix.bin_name }}" "$STAGE/"
+          cp "${{ matrix.launcher }}" "$STAGE/"
+          cp capture.user.js README.md LICENSE "$STAGE/"
+          # Bundle SCOPE / API docs so users can read offline what is/isn't supported
+          mkdir -p "$STAGE/docs"
+          cp m3u8dl-rs/docs/SCOPE.md m3u8dl-rs/docs/API.md "$STAGE/docs/"
+          echo "STAGE=$STAGE" >> "$GITHUB_ENV"
+
+      - name: Make launcher executable (unix)
+        if: matrix.archive_ext == 'tar.gz'
+        run: chmod +x "${{ env.STAGE }}/start-server.sh" "${{ env.STAGE }}/${{ matrix.bin_name }}"
+
+      - name: Archive (zip)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: Compress-Archive -Path "${{ env.STAGE }}/*" -DestinationPath "${{ env.STAGE }}.zip"
+
+      - name: Archive (tar.gz)
+        if: matrix.archive_ext == 'tar.gz'
+        run: tar -czf "${{ env.STAGE }}.tar.gz" "${{ env.STAGE }}"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.STAGE }}.${{ matrix.archive_ext }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

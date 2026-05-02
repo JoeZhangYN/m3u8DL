@@ -1,0 +1,103 @@
+[package]
+name = "m3u8dl-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+description = "Native Rust m3u8/HLS downloader server (Tier 1: plaintext + AES-128-CBC, no DRM)"
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/JoeZhang/m3u8DL"
+homepage = "https://github.com/JoeZhang/m3u8DL"
+keywords = ["m3u8", "hls", "downloader", "video", "aes"]
+categories = ["multimedia::video", "command-line-utilities"]
+
+[[bin]]
+name = "m3u8dl-server"
+path = "src/main.rs"
+
+[dependencies]
+# HTTP server
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# HTTP client (rustls = no OpenSSL on Windows)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "gzip", "brotli", "json"] }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+
+# Bytes / IO
+bytes = "1.7"
+
+# m3u8 parsing
+m3u8-rs = "6.0"
+
+# AES-128-CBC
+aes = "0.8"
+cbc = { version = "0.1", features = ["std"] }
+cipher = "0.4"
+
+# Errors
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Concurrent state
+dashmap = "6.0"
+
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Serde
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# IDs
+uuid = { version = "1.10", features = ["v4"] }
+
+# URL parsing
+url = "2.5"
+
+# Regex (m3u8 normalize one-liner → multi-line)
+regex = "1.10"
+
+# Time (for Job started_at, ISO 8601 serialization)
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+
+[target.'cfg(windows)'.dependencies]
+# WinINET registry read for system proxy detection (HKCU\...\Internet Settings\ProxyServer)
+winreg = "0.52"
+
+[dev-dependencies]
+wiremock = "0.6"
+proptest = "1.5"
+tempfile = "3.13"
+tokio-test = "0.4"
+hex-literal = "0.4"
+cbc = { version = "0.1", features = ["std"] }
+aes = "0.8"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"
+map_err_ignore = "warn"
+let_underscore_must_use = "warn"
+disallowed_methods = "warn"
+struct_excessive_bools = "warn"
+fn_params_excessive_bools = "warn"
+large_enum_variant = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+panic = "abort"
