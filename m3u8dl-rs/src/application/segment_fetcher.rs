@@ -14,7 +14,7 @@ use reqwest::header::HeaderMap;
 use tokio::sync::RwLock;
 use url::Url;
 
-use crate::adapters::aes_decrypt;
+use crate::adapters::{aes_decrypt, png_strip};
 use crate::domain::{DownloadError, Encryption, Result, Segment, SegmentIndex};
 use crate::ports::http_client::{HttpClient, HttpRequest};
 
@@ -45,9 +45,13 @@ pub async fn fetch_one<C: HttpClient>(
         None => req,
     };
     let raw = http.fetch_bytes(req).await?;
+    // Some anti-bot sites wrap segment bytes in a PNG envelope (real PNG signature + trailing
+    // TS/m4s data after IEND). Strip before AES decrypt so the cipher sees clean ciphertext,
+    // and before writing to disk so ffmpeg sees a real container instead of a 1x1 PNG stream.
+    let stripped = png_strip::strip_png_wrapper(&raw);
 
     let plaintext = match seg.encryption {
-        Encryption::None => raw.to_vec(),
+        Encryption::None => stripped.to_vec(),
         Encryption::Aes128Cbc { key_uri, iv } => {
             let key_bytes = resolve_key(http, key_cache, &key_uri, headers).await?;
             if key_bytes.len() != 16 {
@@ -58,7 +62,7 @@ pub async fn fetch_one<C: HttpClient>(
             }
             let mut key = [0u8; 16];
             key.copy_from_slice(&key_bytes);
-            aes_decrypt::decrypt(&raw, &key, &iv)?
+            aes_decrypt::decrypt(stripped, &key, &iv)?
         }
     };
 

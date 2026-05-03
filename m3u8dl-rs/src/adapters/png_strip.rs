@@ -1,9 +1,15 @@
-//! PNG-wrapper stripper. Some anti-bot sites hide their m3u8 inside a PNG file:
-//! the response is a real PNG image with the m3u8 text appended after the IEND chunk.
-//! Browsers/players that just stream-parse PNG ignore the trailing data, but our HTTP fetch
-//! gets the whole blob — we have to find the IEND end-of-image marker and skip past it.
+//! PNG-wrapper stripper. Some anti-bot sites prepend a real PNG envelope (signature + chunks
+//! through IEND) to the actual payload — both **playlist text** and **media segment bytes**.
+//! Browsers/players that stream-parse PNG ignore the trailing data, but our HTTP fetch
+//! gets the whole blob — we find the IEND end-of-image marker and skip past it.
 //!
-//! Algorithm (ported from `pipeline.ps1::Strip-PngWrapper`):
+//! Call sites (single-source rule — both must use this fn, not reimplement):
+//! - `application::download_job` strips the playlist response before parsing
+//! - `application::segment_fetcher` strips each segment before AES decrypt / disk write
+//!
+//! Algorithm (ported from `pipeline.ps1::Strip-PngWrapper`, but applied to segments too —
+//! the legacy script delegated segment download to `N_m3u8DL-RE.exe` which handled this
+//! internally; the Rust port internalized the download path so the strip is now our job):
 //! 1. < 16 bytes → cannot be a wrapped PNG, return as-is
 //! 2. No PNG signature (`89 50 4E 47`) → not wrapped, return as-is
 //! 3. Search for the IEND chunk type+CRC sequence (`49 45 4E 44 AE 42 60 82`) starting at offset 8
