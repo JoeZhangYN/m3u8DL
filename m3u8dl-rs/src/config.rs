@@ -1,13 +1,13 @@
 //! Server configuration. All knobs are env-overridable for ops use without recompile:
 //!
-//! | env                    | default                  |
-//! |------------------------|--------------------------|
-//! | `M3U8DL_PORT`          | `7787`                   |
-//! | `M3U8DL_OUT_DIR`       | `C:\Folder\Download`     |
-//! | `M3U8DL_FFMPEG`        | `ffmpeg.exe`             |
-//! | `M3U8DL_PARALLELISM`   | `16`                     |
-//! | `M3U8DL_RETRIES`       | `3`                      |
-//! | `M3U8DL_PROXY`         | (auto-detect WinINET)    |
+//! | env                    | default                                          |
+//! |------------------------|--------------------------------------------------|
+//! | `M3U8DL_PORT`          | `7787`                                           |
+//! | `M3U8DL_OUT_DIR`       | per-user Downloads dir (Win SHGetKnownFolderPath / XDG / `./downloads` fallback) |
+//! | `M3U8DL_FFMPEG`        | `ffmpeg.exe`                                     |
+//! | `M3U8DL_PARALLELISM`   | `16`                                             |
+//! | `M3U8DL_RETRIES`       | `3`                                              |
+//! | `M3U8DL_PROXY`         | (auto-detect WinINET)                            |
 //!
 //! Default HTTP headers here are **site-agnostic** (User-Agent + Accept-Language only).
 //! Anti-hotlink `Origin` / `Referer` are NOT hardcoded — `capture.user.js` derives them
@@ -56,19 +56,15 @@ const fn default_ffmpeg_name() -> &'static str { "ffmpeg.exe" }
 #[cfg(not(windows))]
 const fn default_ffmpeg_name() -> &'static str { "ffmpeg" }
 
+/// Per-user Downloads directory. `dirs::download_dir` resolves to the user's
+/// actual configured folder (Windows: `SHGetKnownFolderPath(FOLDERID_Downloads)`,
+/// honoring relocation off `%USERPROFILE%`; Linux: `XDG_DOWNLOAD_DIR`; macOS: NSDownloadsDirectory).
+/// Falls back to `./downloads` only when no Downloads dir is registered (very rare;
+/// stripped-down profiles or sandboxed runners).
 fn default_out_dir() -> String {
-    #[cfg(windows)]
-    {
-        r"C:\Folder\Download".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        // ~/Downloads/m3u8dl on linux/macOS, fall back to ./downloads if HOME is unset
-        match std::env::var("HOME") {
-            Ok(home) if !home.is_empty() => format!("{home}/Downloads/m3u8dl"),
-            _ => "./downloads".to_string(),
-        }
-    }
+    dirs::download_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "./downloads".to_string())
 }
 
 #[allow(clippy::expect_used)] // static literal headers — if these don't parse, the source is broken

@@ -68,6 +68,9 @@ regex = "1.10"
 # Time (for Job started_at, ISO 8601 serialization)
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 
+# Per-user well-known directories (Downloads, Config, ...) — Windows: SHGetKnownFolderPath
+dirs = "5"
+
 [target.'cfg(windows)'.dependencies]
 # WinINET registry read for system proxy detection (HKCU\...\Internet Settings\ProxyServer)
 winreg = "0.52"
