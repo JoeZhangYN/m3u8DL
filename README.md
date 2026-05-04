@@ -42,7 +42,7 @@ DASH `.mpd` 也不支持。
 5. 把 `capture.user.js` 拖入浏览器 → Tampermonkey 提示安装 → 确认
 6. 打开任意 HLS 视频播放页 → 右上角自动出现"下载 N 段 / X 分"按钮 → 点击下载
 
-> 默认输出目录：Windows `C:\Folder\Download` / Linux & macOS `~/Downloads/m3u8dl`。可用 `M3U8DL_OUT_DIR` 环境变量覆盖。
+> 默认输出目录：用户的 Downloads 文件夹（Windows `SHGetKnownFolderPath(FOLDERID_Downloads)` / Linux `XDG_DOWNLOAD_DIR` / macOS `NSDownloadsDirectory`；解析失败时回退 `./downloads`）。可用 `M3U8DL_OUT_DIR` 环境变量覆盖。
 
 ### 从源码构建
 
@@ -116,7 +116,7 @@ v3.0 起 **不需要为每个站点改任何代码**：
                                            │   └─────────────────────┘
                                            │              │
                                            │              ▼
-                                           │      C:\Folder\Download\*.mp4
+                                           │      <Downloads>\<title>.mp4
 ```
 
 ## 📡 HTTP API
@@ -185,11 +185,13 @@ m3u8DL/
 
 ## ⚙️ 环境变量
 
+<!-- env defaults SOT'd in m3u8dl-rs/src/config.rs::Config::default(); keep this table in sync -->
+
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `M3U8DL_PORT` | `7787` | HTTP server 监听端口 |
 | `M3U8DL_PROXY` | _(自动探测 Windows 系统代理)_ | `none` / 空 = 强制不走代理；`http://127.0.0.1:7890` = 显式代理；不设 = 读 WinINET 注册表 |
-| `M3U8DL_OUT_DIR` | `C:\Folder\Download` | 输出 mp4 目录（启动时自动 mkdir，失败即退出） |
+| `M3U8DL_OUT_DIR` | _(用户 Downloads 目录)_ | 输出 mp4 目录（启动时自动 mkdir，失败即退出）。默认值由 [`config.rs::default_out_dir`](m3u8dl-rs/src/config.rs) 解析 |
 | `M3U8DL_FFMPEG` | `ffmpeg.exe` | ffmpeg 路径（相对路径会基于 cwd 解析；建议放绝对路径） |
 | `M3U8DL_PARALLELISM` | `16` | 单 job 并行下载分片的 worker 数 |
 | `M3U8DL_RETRIES` | `3` | 单分片失败重试次数（指数退避 250→2000ms） |

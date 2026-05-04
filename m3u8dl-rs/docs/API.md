@@ -84,7 +84,7 @@ event: progress
 data: {"phase":"merging","pct":73.4}
 
 event: progress
-data: {"phase":"done","output":"C:\\Folder\\Download\\xxx.mp4","size_mb":412.3}
+data: {"phase":"done","output":"<out_dir>/xxx.mp4","size_mb":412.3}
 ```
 
 失败：
