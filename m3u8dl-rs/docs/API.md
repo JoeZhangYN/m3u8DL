@@ -32,7 +32,7 @@
 ```
 
 `state` 取值（兼容老 PowerShell server）：`Queued` / `Running` / `Completed`。
-完成态字段：`success: true` + `output: "C:\Folder\Download\xxx.mp4"` + `sizeMB: 412.3`。
+完成态字段：`success: true` + `output: "<out_dir>/xxx.mp4"` + `sizeMB: 412.3`。
 失败态：`success: false` + `error: "<message>"`。
 
 ### `POST /download`

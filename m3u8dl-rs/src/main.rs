@@ -19,6 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cfg = Config::default();
     let port = cfg.port;
+    let out_dir_repr = cfg.out_dir.display().to_string();
 
     // Fail-fast on out_dir issues — better to refuse to start than fail every download
     if let Err(e) = std::fs::create_dir_all(&cfg.out_dir) {
@@ -40,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     println!("=== m3u8dl-server v{} ===", env!("CARGO_PKG_VERSION"));
     println!("listening on http://127.0.0.1:{port}");
+    println!("output directory: {out_dir_repr}");
     println!("see docs/SCOPE.md for supported features");
     axum::serve(listener, app).await?;
     Ok(())

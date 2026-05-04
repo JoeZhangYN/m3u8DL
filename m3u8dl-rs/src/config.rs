@@ -3,7 +3,7 @@
 //! | env                    | default                                          |
 //! |------------------------|--------------------------------------------------|
 //! | `M3U8DL_PORT`          | `7787`                                           |
-//! | `M3U8DL_OUT_DIR`       | per-user Downloads dir (Win SHGetKnownFolderPath / XDG / `./downloads` fallback) |
+//! | `M3U8DL_OUT_DIR`       | per-user `<Downloads>/m3u8dl/` (Win SHGetKnownFolderPath / XDG / `./downloads` fallback) |
 //! | `M3U8DL_FFMPEG`        | `ffmpeg.exe`                                     |
 //! | `M3U8DL_PARALLELISM`   | `16`                                             |
 //! | `M3U8DL_RETRIES`       | `3`                                              |
@@ -56,14 +56,15 @@ const fn default_ffmpeg_name() -> &'static str { "ffmpeg.exe" }
 #[cfg(not(windows))]
 const fn default_ffmpeg_name() -> &'static str { "ffmpeg" }
 
-/// Per-user Downloads directory. `dirs::download_dir` resolves to the user's
-/// actual configured folder (Windows: `SHGetKnownFolderPath(FOLDERID_Downloads)`,
+/// Per-user Downloads directory plus dedicated `m3u8dl/` subfolder. `dirs::download_dir`
+/// resolves to the user's actual configured folder (Windows: `SHGetKnownFolderPath(FOLDERID_Downloads)`,
 /// honoring relocation off `%USERPROFILE%`; Linux: `XDG_DOWNLOAD_DIR`; macOS: NSDownloadsDirectory).
-/// Falls back to `./downloads` only when no Downloads dir is registered (very rare;
+/// The `m3u8dl/` suffix isolates downloader output from the user's other Downloads (browsers, etc.).
+/// Falls back to bare `./downloads` only when no Downloads dir is registered (very rare;
 /// stripped-down profiles or sandboxed runners).
 fn default_out_dir() -> String {
     dirs::download_dir()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.join("m3u8dl").to_string_lossy().into_owned())
         .unwrap_or_else(|| "./downloads".to_string())
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "m3u8dl-server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.87"
 description = "Native Rust m3u8/HLS downloader server (Tier 1: plaintext + AES-128-CBC, no DRM)"

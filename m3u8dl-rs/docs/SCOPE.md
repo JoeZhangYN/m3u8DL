@@ -36,7 +36,7 @@
 
 ### 输出
 - mp4 容器（ffmpeg `-f mpegts -c copy -bsf:a aac_adtstoasc` 重封装）
-- 默认输出目录：用户 Downloads 文件夹（详见 [`config.rs::default_out_dir`](../src/config.rs)；可通过 `M3U8DL_OUT_DIR` 覆盖）
+- 默认输出目录：用户 Downloads 文件夹下的 `m3u8dl/` 子目录（详见 [`config.rs::default_out_dir`](../src/config.rs)；可通过 `M3U8DL_OUT_DIR` 覆盖）
 - 文件名 sanitize（去掉 `\\/:*?"<>|`）
 - 输出 < 1024 字节视为失败
 
