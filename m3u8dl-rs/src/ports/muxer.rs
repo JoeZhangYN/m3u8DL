@@ -32,16 +32,18 @@ impl OrderedSegments {
     }
 }
 
-#[allow(async_fn_in_trait)] // generic over `<M: Muxer>` in the orchestrator, no `dyn`
+// Trait kept dyn-incompatible (orchestrator generic over `<M: Muxer>`); the explicit
+// `+ Send + '_` bound on the returned Future is needed so DownloadJob's run() future
+// is `Send`, which is in turn required for `Arc<dyn DownloadOrchestrator>` (see ports/orchestrator.rs).
 pub trait Muxer: Send + Sync {
     /// Concatenate `inputs` (in order) into `output`. Reports progress 0..100% via `sink` —
     /// `total_duration_secs` (sum of all `#EXTINF` durations from the playlist) lets us turn
     /// ffmpeg's `out_time_ms` into a percentage.
-    async fn mux(
-        &self,
-        inputs: &OrderedSegments,
-        output: &Path,
+    fn mux<'a>(
+        &'a self,
+        inputs: &'a OrderedSegments,
+        output: &'a Path,
         total_duration_secs: f64,
-        sink: &dyn ProgressSink,
-    ) -> Result<()>;
+        sink: &'a dyn ProgressSink,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'a;
 }

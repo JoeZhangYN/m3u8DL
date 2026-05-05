@@ -74,6 +74,9 @@ dirs = "5"
 # Jitter for retry backoff (avoid thundering herd on shared CDN failures)
 rand = "0.9"
 
+# Dyn-compatible async trait for DownloadOrchestrator (AppState needs Arc<dyn ...>)
+async-trait = "0.1"
+
 [target.'cfg(windows)'.dependencies]
 # WinINET registry read for system proxy detection (HKCU\...\Internet Settings\ProxyServer)
 winreg = "0.52"

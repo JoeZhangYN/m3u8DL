@@ -1039,6 +1039,7 @@ version = "0.1.2"
 dependencies = [
  "aes",
  "anyhow",
+ "async-trait",
  "axum",
  "bytes",
  "cbc",

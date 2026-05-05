@@ -15,13 +15,14 @@ use m3u8dl_server::application::download_job::DownloadJob;
 use m3u8dl_server::application::job_registry::JobRegistry;
 use m3u8dl_server::config::Config;
 use m3u8dl_server::http::routes::{AppState, router};
+use m3u8dl_server::ports::orchestrator::DownloadOrchestrator;
 use serde_json::Value;
 use tokio::net::TcpListener;
 
-// We can't substitute Muxer here because routes::AppState carries the concrete
-// `DownloadJob<ReqwestClient, FfmpegMuxer>` (no type erasure) — for HTTP-shape tests we
-// give it a non-existent ffmpeg path; the spawned background job will fail in metadata
-// fetch (file not exists), but we only assert on the synchronous /download response shape.
+// AppState now carries `Arc<dyn DownloadOrchestrator>` (Plan commit 12) so we *could*
+// stub the orchestrator; for these HTTP-shape tests we still assemble the real
+// DownloadJob with a non-existent ffmpeg path — the spawned background job will fail
+// downstream (we only assert on the synchronous /download response shape).
 
 #[allow(clippy::expect_used)] // tests/* helper
 async fn spawn_server(out_dir: PathBuf) -> u16 {
@@ -32,7 +33,7 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
         2.0,
         60,
     );
-    let job = Arc::new(DownloadJob {
+    let job: Arc<dyn DownloadOrchestrator> = Arc::new(DownloadJob {
         http,
         muxer,
         out_dir,

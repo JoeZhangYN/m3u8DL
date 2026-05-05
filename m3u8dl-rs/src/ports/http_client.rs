@@ -43,14 +43,24 @@ pub struct RangeSpec {
     pub end: u64,
 }
 
-#[allow(async_fn_in_trait)] // we never use this as `dyn`; orchestrator is generic over `<C: HttpClient>`
+// Trait kept dyn-incompatible (orchestrator generic over `<C: HttpClient>`); the explicit
+// `+ Send + '_` bounds on the returned Future are needed so DownloadJob's run() future
+// is `Send`, which is in turn required for `Arc<dyn DownloadOrchestrator>` (see ports/orchestrator.rs).
 pub trait HttpClient: Send + Sync {
-    async fn fetch_bytes(&self, req: HttpRequest) -> Result<Bytes>;
+    fn fetch_bytes(
+        &self,
+        req: HttpRequest,
+    ) -> impl std::future::Future<Output = Result<Bytes>> + Send + '_;
 
     /// Default impl: fetch bytes, decode UTF-8.
-    async fn fetch_text(&self, req: HttpRequest) -> Result<String> {
-        let bytes = self.fetch_bytes(req).await?;
-        String::from_utf8(bytes.to_vec())
-            .map_err(|e| crate::domain::DownloadError::Parse(format!("utf8 decode: {e}")))
+    fn fetch_text(
+        &self,
+        req: HttpRequest,
+    ) -> impl std::future::Future<Output = Result<String>> + Send + '_ {
+        async move {
+            let bytes = self.fetch_bytes(req).await?;
+            String::from_utf8(bytes.to_vec())
+                .map_err(|e| crate::domain::DownloadError::Parse(format!("utf8 decode: {e}")))
+        }
     }
 }

@@ -1,5 +1,9 @@
 // error-chain: exempt — IO/path errors here are wrapped in DownloadError variants that
 // already carry path/operation context; orchestrator-level failures are logged via tracing.
+// file-size-gate: exempt — orchestrator coordinator file with several private helpers
+//   (resolve_media / fetch_playlist / resolve_variant / make_temp_workdir / sanitize) +
+//   DownloadOrchestrator impl. Splitting into multiple files would scatter the pipeline
+//   across modules, hurting readability. L1+ pragma per CLAUDE.md hexagonal layering.
 
 //! Download orchestrator. Wires: input detection → playlist fetch → PNG strip / normalize →
 //! parse → parallel segment fetch+decrypt → ffmpeg mux → output validation. Generic over
@@ -22,6 +26,7 @@ use crate::domain::{
 };
 use crate::ports::http_client::{HttpClient, HttpRequest};
 use crate::ports::muxer::{Muxer, OrderedSegments};
+use crate::ports::orchestrator::DownloadOrchestrator;
 use crate::ports::progress_sink::ProgressSink;
 
 pub struct DownloadJob<C, M> {
@@ -157,6 +162,21 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
             Playlist::Media(m) => Ok(m),
             Playlist::Master { .. } => Err(DownloadError::Parse("master nested in master".into())),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl<C, M> DownloadOrchestrator for DownloadJob<C, M>
+where
+    C: HttpClient + Send + Sync + 'static,
+    M: Muxer + Send + Sync + 'static,
+{
+    async fn run(
+        &self,
+        req: DownloadRequest,
+        sink: Arc<dyn ProgressSink>,
+    ) -> Result<(OutputPath, f64)> {
+        DownloadJob::run(self, req, sink).await
     }
 }
 

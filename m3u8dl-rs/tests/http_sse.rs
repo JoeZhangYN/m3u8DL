@@ -13,6 +13,7 @@ use m3u8dl_server::application::download_job::DownloadJob;
 use m3u8dl_server::application::job_registry::JobRegistry;
 use m3u8dl_server::config::Config;
 use m3u8dl_server::http::routes::{AppState, router};
+use m3u8dl_server::ports::orchestrator::DownloadOrchestrator;
 use serde_json::Value;
 use tokio::net::TcpListener;
 
@@ -21,7 +22,7 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
     let http = ReqwestClient::new().expect("client").with_max_retries(0);
     let muxer = FfmpegMuxer::new(PathBuf::from("nonexistent-ffmpeg.exe"), 2.0, 60);
-    let job = Arc::new(DownloadJob {
+    let job: Arc<dyn DownloadOrchestrator> = Arc::new(DownloadJob {
         http,
         muxer,
         out_dir,

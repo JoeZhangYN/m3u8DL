@@ -7,6 +7,7 @@ use m3u8dl_server::application::download_job::DownloadJob;
 use m3u8dl_server::application::job_registry::JobRegistry;
 use m3u8dl_server::config::Config;
 use m3u8dl_server::http::routes::{AppState, router};
+use m3u8dl_server::ports::orchestrator::DownloadOrchestrator;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -45,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
         cfg.mux_deadline_factor,
         cfg.mux_deadline_min_secs,
     );
-    let job = Arc::new(DownloadJob {
+    let job: Arc<dyn DownloadOrchestrator> = Arc::new(DownloadJob {
         http,
         muxer,
         out_dir: cfg.out_dir.clone(),

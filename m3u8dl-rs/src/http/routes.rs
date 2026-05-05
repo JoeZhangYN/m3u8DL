@@ -23,9 +23,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::Level;
 
-use crate::adapters::ffmpeg_muxer::FfmpegMuxer;
-use crate::adapters::reqwest_client::ReqwestClient;
-use crate::application::download_job::{DownloadJob, DownloadRequest};
+use crate::application::download_job::DownloadRequest;
 use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
 use crate::domain::{JobId, M3u8Input};
@@ -33,12 +31,13 @@ use crate::http::dto::{
     DownloadAccepted, DownloadRequestBody, ErrorBody, JobSnapshot, PingResponse, StatusResponse,
 };
 use crate::http::handlers::{build_outbound_headers, spawn_download_task};
-
-pub type Job = DownloadJob<ReqwestClient, FfmpegMuxer>;
+use crate::ports::orchestrator::DownloadOrchestrator;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub job: Arc<Job>,
+    /// Trait object so tests can substitute a stub orchestrator without wiring a real
+    /// ReqwestClient + FfmpegMuxer. Plan §4.3 closes audit DIP-hardwired-to-concrete-adapter.
+    pub job: Arc<dyn DownloadOrchestrator>,
     pub registry: JobRegistry,
     pub config: Config,
 }
