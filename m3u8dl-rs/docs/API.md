@@ -10,8 +10,10 @@
 存活探测。
 
 ```json
-{ "ok": true, "port": 7787, "jobs": 3 }
+{ "ok": true, "port": 7787, "jobs": 3, "api_version": 1 }
 ```
+
+`api_version` 字段是 HTTP API contract 版本，wire-breaking 改动时 bump（strict additive 变化不 bump）。SOT 在 `m3u8dl-rs/src/http/dto.rs::API_VERSION` 常量。capture.user.js v3.10 不读此字段（兼容）；后续脚本可基于此判分支。
 
 ### `GET /status`
 列出所有 job 的快照。

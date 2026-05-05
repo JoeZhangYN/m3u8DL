@@ -28,7 +28,8 @@ use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
 use crate::domain::{JobId, M3u8Input};
 use crate::http::dto::{
-    DownloadAccepted, DownloadRequestBody, ErrorBody, JobSnapshot, PingResponse, StatusResponse,
+    API_VERSION, DownloadAccepted, DownloadRequestBody, ErrorBody, JobSnapshot, PingResponse,
+    StatusResponse,
 };
 use crate::http::handlers::{build_outbound_headers, spawn_download_task};
 use crate::ports::orchestrator::DownloadOrchestrator;
@@ -67,6 +68,7 @@ async fn ping(State(s): State<AppState>) -> Json<PingResponse> {
         ok: true,
         port: s.config.port,
         jobs: s.registry.count(),
+        api_version: API_VERSION,
     })
 }
 

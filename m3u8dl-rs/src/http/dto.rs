@@ -9,6 +9,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::{Job, JobState};
 
+/// HTTP API version exposed via `GET /ping`. Bump on any wire-breaking change to the JSON
+/// contract so clients can branch on this number (capture.user.js v3.10 does NOT read it
+/// today; v3.11+ may use it for compat checks). Strict-additive changes (new optional
+/// field, new variant in a non-discriminated enum) do NOT bump this number.
+pub const API_VERSION: u32 = 1;
+
 #[derive(Debug, Deserialize)]
 pub struct DownloadRequestBody {
     /// The actual m3u8 URL the browser saw (used for base-URL derivation).
@@ -43,6 +49,8 @@ pub struct PingResponse {
     pub ok: bool,
     pub port: u16,
     pub jobs: usize,
+    /// HTTP API contract version — see `API_VERSION` for the SOT constant.
+    pub api_version: u32,
 }
 
 #[derive(Debug, Serialize)]
