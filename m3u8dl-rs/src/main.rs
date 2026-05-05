@@ -1,8 +1,10 @@
 // Bin entry. Lib (`src/lib.rs`) holds all logic so integration tests in `tests/` can import.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use m3u8dl_server::adapters::{ffmpeg_muxer::FfmpegMuxer, reqwest_client::ReqwestClient};
+use m3u8dl_server::application::cleanup::periodic_sweep;
 use m3u8dl_server::application::download_job::DownloadJob;
 use m3u8dl_server::application::idempotency::IdempotencyTable;
 use m3u8dl_server::application::job_registry::JobRegistry;
@@ -53,11 +55,23 @@ async fn main() -> anyhow::Result<()> {
         out_dir: cfg.out_dir.clone(),
         parallelism: cfg.parallelism,
     });
+    let idempotency = IdempotencyTable::new();
+    // Spawn periodic sweep of stale temp work_dirs + expired idempotency entries.
+    // 24h age default → never deletes active jobs (job_deadline default 2h).
+    {
+        let temp_root = std::env::temp_dir();
+        let age = Duration::from_secs(cfg.sweep_age_hours * 3600);
+        let interval = Duration::from_secs(cfg.sweep_interval_secs);
+        let idem_ttl = Duration::from_secs(cfg.idempotency_ttl_secs);
+        let dry_run = cfg.sweep_dry_run;
+        let table = idempotency.clone();
+        tokio::spawn(periodic_sweep(temp_root, age, interval, idem_ttl, dry_run, table));
+    }
     let state = AppState {
         job,
         registry: JobRegistry::new(),
         config: cfg,
-        idempotency: IdempotencyTable::new(),
+        idempotency,
     };
     let app = router(state);
 

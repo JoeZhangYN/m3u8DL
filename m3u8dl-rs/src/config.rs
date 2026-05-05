@@ -43,6 +43,14 @@ pub struct Config {
     /// return the same JobId. Default 300s = 5min — enough to cover client retry storms
     /// without holding state forever.
     pub idempotency_ttl_secs: u64,
+    /// Periodic sweep cadence (seconds) for stale temp work_dirs + expired Idempotency
+    /// entries. Default 60s.
+    pub sweep_interval_secs: u64,
+    /// Sweep age threshold (hours) — work_dirs older than this get deleted. Default 24h.
+    /// Must be ≫ job_deadline_secs (default 7200s = 2h) to avoid deleting active jobs.
+    pub sweep_age_hours: u64,
+    /// Sweep dry-run mode (true → log only, no actual rm). Default false (real sweep).
+    pub sweep_dry_run: bool,
     /// Site-agnostic baseline headers. Per-request `Origin` / `Referer` come from the client.
     pub default_headers: HeaderMap,
 }
@@ -59,6 +67,9 @@ impl Default for Config {
             mux_deadline_factor: env_or("M3U8DL_MUX_DEADLINE_FACTOR", 2.0),
             mux_deadline_min_secs: env_or("M3U8DL_MUX_DEADLINE_MIN_SECS", 60),
             idempotency_ttl_secs: env_or("M3U8DL_IDEMPOTENCY_TTL_SECS", 300),
+            sweep_interval_secs: env_or("M3U8DL_SWEEP_INTERVAL_SECS", 60),
+            sweep_age_hours: env_or("M3U8DL_TEMP_SWEEP_AGE_HOURS", 24),
+            sweep_dry_run: env_or("M3U8DL_SWEEP_DRY_RUN", false),
             default_headers: DEFAULT_HEADERS.clone(),
         }
     }
