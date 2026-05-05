@@ -86,11 +86,12 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
             .mux(&inputs, &output, total_dur, sink.as_ref())
             .await?;
 
-        // OutputPath::try_validate enforces "size >= 1024" at the type boundary — ANY
-        // OutputPath value downstream is guaranteed valid by construction. fs::metadata
-        // is the application-layer effect; domain stays pure (plan §2.1).
+        // OutputPath::try_validate enforces size>=1024 at the type boundary (domain pure).
+        // Success path also cleans up the per-job temp work_dir; failure path keeps it
+        // for post-mortem (audit-idempotency.temp-leak-no-cleanup WARN).
         let len = tokio::fs::metadata(&output).await?.len();
         let (output_path, size_mb) = OutputPath::try_validate(output, len)?;
+        drop(tokio::fs::remove_dir_all(&work_dir).await);
         sink.emit(ProgressEvent::done(output_path.0.clone(), size_mb));
         Ok((output_path, size_mb))
     }
