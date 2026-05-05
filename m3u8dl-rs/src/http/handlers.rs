@@ -84,3 +84,81 @@ pub(crate) fn is_allowed_header(name: &str) -> bool {
         "origin" | "referer" | "cookie" | "user-agent" | "accept" | "accept-language" | "x-forwarded-for"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Allow list — 7 canonical lowercase
+    #[test]
+    fn allows_all_seven_canonical() {
+        for h in ["origin", "referer", "cookie", "user-agent", "accept", "accept-language", "x-forwarded-for"] {
+            assert!(is_allowed_header(h), "expected allow: {h}");
+        }
+    }
+
+    // Case-insensitive
+    #[test]
+    fn allows_mixed_case() {
+        assert!(is_allowed_header("ORIGIN"));
+        assert!(is_allowed_header("Cookie"));
+        assert!(is_allowed_header("User-Agent"));
+        assert!(is_allowed_header("Accept-Language"));
+        assert!(is_allowed_header("USER-AGENT"));
+    }
+
+    // Reject sensitive headers (regression vectors)
+    #[test]
+    fn rejects_authorization() {
+        for h in ["authorization", "Authorization", "AUTHORIZATION"] {
+            assert!(!is_allowed_header(h), "expected reject: {h}");
+        }
+    }
+
+    #[test]
+    fn rejects_host_and_content_headers() {
+        for h in ["host", "Host", "content-length", "Content-Length", "content-type", "Content-Type"] {
+            assert!(!is_allowed_header(h), "expected reject: {h}");
+        }
+    }
+
+    #[test]
+    fn rejects_arbitrary_x_headers() {
+        for h in ["x-custom", "x-api-key", "X-Forwarded-Host", "x-real-ip"] {
+            assert!(!is_allowed_header(h), "expected reject: {h}");
+        }
+    }
+
+    #[test]
+    fn rejects_proxy_authorization() {
+        assert!(!is_allowed_header("proxy-authorization"));
+        assert!(!is_allowed_header("Proxy-Authorization"));
+    }
+
+    // Whitespace edges — must NOT match (callers feed canonical names)
+    #[test]
+    fn rejects_leading_or_trailing_whitespace() {
+        for h in [" origin", "origin ", "\torigin", "origin\t"] {
+            assert!(!is_allowed_header(h), "expected reject: {h:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_internal_space() {
+        assert!(!is_allowed_header("user agent"));
+    }
+
+    // Edge / partial match
+    #[test]
+    fn rejects_empty() {
+        assert!(!is_allowed_header(""));
+    }
+
+    #[test]
+    fn rejects_partial_match() {
+        // prefix / suffix / substring of allowlisted name must not match
+        for h in ["or", "origin-extended", "super-origin", "userref"] {
+            assert!(!is_allowed_header(h), "expected reject: {h}");
+        }
+    }
+}
