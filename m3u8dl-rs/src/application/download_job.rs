@@ -203,10 +203,9 @@ async fn make_temp_workdir() -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Replace 8 Windows-illegal filename chars with `_`. Promoted to `pub(crate)` so
-/// the inline `#[cfg(test)] mod tests` can drive it directly. Plan D7 will replace
-/// this with `SanitizedFilename::try_from` smart constructor that also rejects
-/// `..` / Windows reserved names / control chars / leading-dash (current audit gap).
+/// Replace 8 Windows-illegal filename chars with `_`. Returns the sanitized String
+/// unconditionally — does NOT enforce safety against `..` / Windows reserved /
+/// control chars. Use `sanitize_strict` for hostile-input boundaries (D7 hardening).
 pub(crate) fn sanitize(name: &str) -> String {
     name.chars()
         .map(|c| match c {
@@ -214,6 +213,61 @@ pub(crate) fn sanitize(name: &str) -> String {
             _ => c,
         })
         .collect()
+}
+
+/// Plan D7 hardening: strict filename validator. Rejects path traversal `..`, Windows
+/// reserved names (CON/PRN/AUX/NUL/COM[1-9]/LPT[1-9] case-insensitive incl with
+/// extension), control chars `\x00-\x1F`, leading dash (CLI flag confusion), trailing
+/// space/dot (Windows silently strips → name collision), and empty-after-sanitize.
+/// Use at HTTP boundary where the title comes from untrusted client body.
+pub(crate) fn sanitize_strict(name: &str) -> std::result::Result<String, SanitizeError> {
+    use std::result::Result as StdResult;
+    let s = sanitize(name);
+    if s.is_empty() {
+        return StdResult::Err(SanitizeError::Empty);
+    }
+    if s.starts_with('-') {
+        return StdResult::Err(SanitizeError::LeadingDash);
+    }
+    if s.ends_with(' ') || s.ends_with('.') {
+        return StdResult::Err(SanitizeError::TrailingSpaceOrDot);
+    }
+    if s.split(['/', '\\', '_']).any(|seg| seg == "..") {
+        return StdResult::Err(SanitizeError::PathTraversal);
+    }
+    if s.chars().any(|c| (c as u32) < 0x20) {
+        return StdResult::Err(SanitizeError::ControlChar);
+    }
+    let stem_lower: String = s
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if matches!(
+        stem_lower.as_str(),
+        "con" | "prn" | "aux" | "nul"
+            | "com1" | "com2" | "com3" | "com4" | "com5" | "com6" | "com7" | "com8" | "com9"
+            | "lpt1" | "lpt2" | "lpt3" | "lpt4" | "lpt5" | "lpt6" | "lpt7" | "lpt8" | "lpt9"
+    ) {
+        return StdResult::Err(SanitizeError::WindowsReserved(stem_lower));
+    }
+    StdResult::Ok(s)
+}
+
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum SanitizeError {
+    #[error("filename empty after sanitize")]
+    Empty,
+    #[error("filename has leading dash (CLI flag confusion)")]
+    LeadingDash,
+    #[error("filename has trailing space or dot (Windows silent strip)")]
+    TrailingSpaceOrDot,
+    #[error("filename contains path traversal segment '..'")]
+    PathTraversal,
+    #[error("filename contains control character")]
+    ControlChar,
+    #[error("filename uses Windows reserved name: {0}")]
+    WindowsReserved(String),
 }
 
 #[cfg(test)]
@@ -255,32 +309,71 @@ mod tests {
         assert_eq!(sanitize("《剧名》"), "《剧名》");
     }
 
-    // ---- AUDIT: known gap (plan D7 hardening) — these `should panic` style tests
-    // would FAIL today; they're commented out so they don't break CI but document
-    // the missing reject cases. D7 commit will uncomment + flip to `assert!`.
+    // ---- D7 hardening (sanitize_strict). Rejects hostile titles before they reach
+    // disk; HTTP layer falls back to `video_{jobId}` on rejection.
 
-    // #[test]
-    // fn rejects_path_traversal() {
-    //     // current: passes through ".." → could let title escape out_dir
-    //     assert!(sanitize_strict("../../etc/passwd").is_err());
-    // }
+    #[test]
+    fn strict_rejects_path_traversal() {
+        // Both `..` literal and post-sanitize `..` (after `/` → `_`) caught
+        for name in ["..", "../../etc", "a/../b", "x\\..\\y", "ok_..", "../safe"] {
+            assert!(
+                sanitize_strict(name).is_err(),
+                "expected reject path traversal: {name:?}"
+            );
+        }
+    }
 
-    // #[test]
-    // fn rejects_windows_reserved_names() {
-    //     for name in ["CON", "PRN", "AUX", "NUL", "COM1", "LPT9"] {
-    //         assert!(sanitize_strict(name).is_err(), "expected reject {name}");
-    //     }
-    // }
+    #[test]
+    fn strict_rejects_windows_reserved_names() {
+        for name in ["CON", "PRN", "AUX", "NUL", "COM1", "COM9", "LPT1", "LPT9", "con.txt"] {
+            assert!(
+                sanitize_strict(name).is_err(),
+                "expected reject Windows reserved: {name}"
+            );
+        }
+    }
 
-    // #[test]
-    // fn rejects_control_chars() {
-    //     assert!(sanitize_strict("foo\u{0000}bar").is_err());
-    //     assert!(sanitize_strict("\x07alarm").is_err());
-    // }
+    #[test]
+    fn strict_rejects_windows_reserved_case_insensitive() {
+        for name in ["con", "Con", "PRN", "lpt5"] {
+            assert!(
+                sanitize_strict(name).is_err(),
+                "expected case-insensitive reject: {name}"
+            );
+        }
+    }
 
-    // #[test]
-    // fn rejects_leading_dash() {
-    //     // would look like a CLI flag in some downstream tooling
-    //     assert!(sanitize_strict("-rf").is_err());
-    // }
+    #[test]
+    fn strict_rejects_control_chars() {
+        assert!(sanitize_strict("foo\u{0000}bar").is_err());
+        assert!(sanitize_strict("\x07alarm").is_err());
+        assert!(sanitize_strict("a\x1Fb").is_err());
+    }
+
+    #[test]
+    fn strict_rejects_leading_dash() {
+        assert!(sanitize_strict("-rf").is_err());
+        assert!(sanitize_strict("-flag").is_err());
+    }
+
+    #[test]
+    fn strict_rejects_trailing_space_or_dot() {
+        assert!(sanitize_strict("foo ").is_err());
+        assert!(sanitize_strict("bar.").is_err());
+    }
+
+    #[test]
+    fn strict_rejects_empty() {
+        assert!(matches!(sanitize_strict("").unwrap_err(), SanitizeError::Empty));
+    }
+
+    #[test]
+    fn strict_accepts_normal_titles() {
+        for name in ["MyVideo_01", "第一集", "video.mp4", "foo bar baz", "ABC123"] {
+            assert!(
+                sanitize_strict(name).is_ok(),
+                "expected accept: {name}"
+            );
+        }
+    }
 }

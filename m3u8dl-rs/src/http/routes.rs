@@ -23,7 +23,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::Level;
 
-use crate::application::download_job::DownloadRequest;
+use crate::application::download_job::{DownloadRequest, sanitize_strict};
 use crate::application::idempotency::IdempotencyTable;
 use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
@@ -118,7 +118,19 @@ async fn download(
         return Ok(cached);
     }
     let id = JobId::new();
-    let title = body.title.clone().unwrap_or_else(|| format!("video_{id}"));
+    // Plan D7: harden filename against `..` / Windows reserved / control chars / leading dash.
+    // If client supplies a hostile / empty title, fall back to the safe `video_{jobId}` form
+    // (rather than 400-rejecting and forcing the client to clean their own input).
+    let raw_title = body.title.clone().unwrap_or_else(|| format!("video_{id}"));
+    let title = sanitize_strict(&raw_title).unwrap_or_else(|reason| {
+        tracing::info!(
+            event = "title_sanitize_fallback",
+            job_id = %id,
+            raw_len = raw_title.len(),
+            reason = %reason,
+        );
+        format!("video_{id}")
+    });
     let source_url = body.url.as_deref().and_then(|u| url::Url::parse(u).ok());
     let input = M3u8Input::detect(&body.m3u8).map_err(|e| {
         (
