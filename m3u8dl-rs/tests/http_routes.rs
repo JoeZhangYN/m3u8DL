@@ -1,3 +1,8 @@
+// file-size-gate: exempt — large e2e suite covering happy path / error / SSE / state
+//   transitions in one file matches the existing pattern; per-test split would multiply
+//   server-spawn boilerplate. Plan commit 12 introduces DownloadOrchestrator trait which
+//   may unlock a stub-based slimmer suite for follow-up.
+
 //! HTTP layer integration tests. Spins up the real router on an OS-picked port and hits
 //! it via reqwest. Mock the muxer (so no ffmpeg dep) and use wiremock for the upstream m3u8.
 
@@ -22,9 +27,11 @@ use tokio::net::TcpListener;
 async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
     let http = ReqwestClient::new().expect("client").with_max_retries(0);
-    let muxer = m3u8dl_server::adapters::ffmpeg_muxer::FfmpegMuxer::new(PathBuf::from(
-        "nonexistent-ffmpeg.exe",
-    ));
+    let muxer = m3u8dl_server::adapters::ffmpeg_muxer::FfmpegMuxer::new(
+        PathBuf::from("nonexistent-ffmpeg.exe"),
+        2.0,
+        60,
+    );
     let job = Arc::new(DownloadJob {
         http,
         muxer,

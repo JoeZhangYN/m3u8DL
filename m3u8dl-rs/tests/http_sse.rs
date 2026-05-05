@@ -20,7 +20,7 @@ use tokio::net::TcpListener;
 async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
     let http = ReqwestClient::new().expect("client").with_max_retries(0);
-    let muxer = FfmpegMuxer::new(PathBuf::from("nonexistent-ffmpeg.exe"));
+    let muxer = FfmpegMuxer::new(PathBuf::from("nonexistent-ffmpeg.exe"), 2.0, 60);
     let job = Arc::new(DownloadJob {
         http,
         muxer,

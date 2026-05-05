@@ -81,7 +81,7 @@ async fn muxes_two_test_segments_into_mp4() {
     make_test_segment(&seg0, 1).await;
     make_test_segment(&seg1, 1).await;
 
-    let muxer = FfmpegMuxer::new(ffmpeg_path());
+    let muxer = FfmpegMuxer::new(ffmpeg_path(), 2.0, 60);
     let sink = CollectingSink::new();
     let inputs =
         OrderedSegments::from_indexed(vec![(SegmentIndex(0), seg0), (SegmentIndex(1), seg1)]);
@@ -114,7 +114,7 @@ async fn muxes_two_test_segments_into_mp4() {
 async fn rejects_empty_input_list() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let out = tmp.path().join("merged.mp4");
-    let muxer = FfmpegMuxer::new(ffmpeg_path());
+    let muxer = FfmpegMuxer::new(ffmpeg_path(), 2.0, 60);
     let sink = CollectingSink::new();
     let inputs = OrderedSegments::from_indexed(vec![]);
     let err = muxer

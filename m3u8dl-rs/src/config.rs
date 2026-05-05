@@ -1,13 +1,17 @@
 //! Server configuration. All knobs are env-overridable for ops use without recompile:
 //!
-//! | env                    | default                                          |
-//! |------------------------|--------------------------------------------------|
-//! | `M3U8DL_PORT`          | `7787`                                           |
-//! | `M3U8DL_OUT_DIR`       | per-user `<Downloads>/m3u8dl/` (Win SHGetKnownFolderPath / XDG / `./downloads` fallback) |
-//! | `M3U8DL_FFMPEG`        | `ffmpeg.exe`                                     |
-//! | `M3U8DL_PARALLELISM`   | `16`                                             |
-//! | `M3U8DL_RETRIES`       | `3`                                              |
-//! | `M3U8DL_PROXY`         | (auto-detect WinINET)                            |
+//! | env                          | default                                    |
+//! |------------------------------|--------------------------------------------|
+//! | `M3U8DL_PORT`                | `7787`                                     |
+//! | `M3U8DL_OUT_DIR`             | per-user `<Downloads>/m3u8dl/` (Win SHGetKnownFolderPath / XDG / `./downloads` fallback) |
+//! | `M3U8DL_FFMPEG`              | `ffmpeg.exe`                               |
+//! | `M3U8DL_PARALLELISM`         | `16`                                       |
+//! | `M3U8DL_RETRIES`             | `3`                                        |
+//! | `M3U8DL_PROXY`               | (auto-detect WinINET)                      |
+//! | `M3U8DL_LOG_FORMAT`          | text (set `json` for JSONL aggregation)    |
+//! | `M3U8DL_JOB_DEADLINE_SECS`   | `7200` (2h hard cap on a single job)       |
+//! | `M3U8DL_MUX_DEADLINE_FACTOR` | `2.0` (mux deadline = duration × factor + min) |
+//! | `M3U8DL_MUX_DEADLINE_MIN_SECS` | `60` (floor for short videos)            |
 //!
 //! Default HTTP headers here are **site-agnostic** (User-Agent + Accept-Language only).
 //! Anti-hotlink `Origin` / `Referer` are NOT hardcoded — `capture.user.js` derives them
@@ -26,6 +30,15 @@ pub struct Config {
     pub ffmpeg_path: PathBuf,
     pub parallelism: usize,
     pub max_retries: u32,
+    /// Hard cap on total time for a single download job (seconds). Outer `tokio::time::timeout`
+    /// in routes.rs wraps the whole orchestrator; on elapse the job is marked Failed and
+    /// any in-flight ffmpeg child is dropped (which kills the OS process).
+    pub job_deadline_secs: u64,
+    /// Mux deadline = `total_duration_secs * factor + min_secs`. Mux is stream copy
+    /// (no re-encode), so it should be well under playback duration; factor of 2.0
+    /// is generous against IO stalls without being so loose that hung children linger.
+    pub mux_deadline_factor: f64,
+    pub mux_deadline_min_secs: u64,
     /// Site-agnostic baseline headers. Per-request `Origin` / `Referer` come from the client.
     pub default_headers: HeaderMap,
 }
@@ -38,6 +51,9 @@ impl Default for Config {
             ffmpeg_path: env_or_str("M3U8DL_FFMPEG", default_ffmpeg_name()).into(),
             parallelism: env_or("M3U8DL_PARALLELISM", 16),
             max_retries: env_or("M3U8DL_RETRIES", 3),
+            job_deadline_secs: env_or("M3U8DL_JOB_DEADLINE_SECS", 7200),
+            mux_deadline_factor: env_or("M3U8DL_MUX_DEADLINE_FACTOR", 2.0),
+            mux_deadline_min_secs: env_or("M3U8DL_MUX_DEADLINE_MIN_SECS", 60),
             default_headers: DEFAULT_HEADERS.clone(),
         }
     }

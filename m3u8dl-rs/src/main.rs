@@ -40,7 +40,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let http = ReqwestClient::new()?.with_max_retries(cfg.max_retries);
-    let muxer = FfmpegMuxer::new(cfg.ffmpeg_path.clone());
+    let muxer = FfmpegMuxer::new(
+        cfg.ffmpeg_path.clone(),
+        cfg.mux_deadline_factor,
+        cfg.mux_deadline_min_secs,
+    );
     let job = Arc::new(DownloadJob {
         http,
         muxer,
