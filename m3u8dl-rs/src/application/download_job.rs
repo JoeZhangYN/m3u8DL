@@ -187,11 +187,84 @@ async fn make_temp_workdir() -> Result<PathBuf> {
     Ok(dir)
 }
 
-fn sanitize(name: &str) -> String {
+/// Replace 8 Windows-illegal filename chars with `_`. Promoted to `pub(crate)` so
+/// the inline `#[cfg(test)] mod tests` can drive it directly. Plan D7 will replace
+/// this with `SanitizedFilename::try_from` smart constructor that also rejects
+/// `..` / Windows reserved names / control chars / leading-dash (current audit gap).
+pub(crate) fn sanitize(name: &str) -> String {
     name.chars()
         .map(|c| match c {
             '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
             _ => c,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Documents the CURRENT (pre-D7) behavior of `sanitize`. After D7 lands, these
+    // tests stay green for the 8-illegal-char replacement; the audit-gap section
+    // becomes hard reject assertions instead of comments.
+
+    #[test]
+    fn replaces_eight_windows_illegal_chars() {
+        for c in ['\\', '/', ':', '*', '?', '"', '<', '>', '|'] {
+            let input = format!("a{c}b");
+            assert_eq!(sanitize(&input), "a_b", "char {c:?} not replaced");
+        }
+    }
+
+    #[test]
+    fn passes_through_normal_alphanumeric() {
+        assert_eq!(sanitize("MyVideo_01"), "MyVideo_01");
+        assert_eq!(sanitize("第一集"), "第一集");
+        assert_eq!(sanitize("video.mp4"), "video.mp4");
+    }
+
+    #[test]
+    fn handles_empty_string() {
+        assert_eq!(sanitize(""), "");
+    }
+
+    #[test]
+    fn replaces_multiple_in_one_string() {
+        assert_eq!(sanitize("a/b\\c:d"), "a_b_c_d");
+    }
+
+    #[test]
+    fn preserves_unicode_punctuation() {
+        // Chinese punctuation is not in the illegal set
+        assert_eq!(sanitize("《剧名》"), "《剧名》");
+    }
+
+    // ---- AUDIT: known gap (plan D7 hardening) — these `should panic` style tests
+    // would FAIL today; they're commented out so they don't break CI but document
+    // the missing reject cases. D7 commit will uncomment + flip to `assert!`.
+
+    // #[test]
+    // fn rejects_path_traversal() {
+    //     // current: passes through ".." → could let title escape out_dir
+    //     assert!(sanitize_strict("../../etc/passwd").is_err());
+    // }
+
+    // #[test]
+    // fn rejects_windows_reserved_names() {
+    //     for name in ["CON", "PRN", "AUX", "NUL", "COM1", "LPT9"] {
+    //         assert!(sanitize_strict(name).is_err(), "expected reject {name}");
+    //     }
+    // }
+
+    // #[test]
+    // fn rejects_control_chars() {
+    //     assert!(sanitize_strict("foo\u{0000}bar").is_err());
+    //     assert!(sanitize_strict("\x07alarm").is_err());
+    // }
+
+    // #[test]
+    // fn rejects_leading_dash() {
+    //     // would look like a CLI flag in some downstream tooling
+    //     assert!(sanitize_strict("-rf").is_err());
+    // }
 }
