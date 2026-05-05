@@ -33,3 +33,11 @@ Downloads/
 
 # --- Personal reference notes (not part of public docs) -----------------------
 RUST_PORT_REFERENCE.md
+
+# --- Stray artifacts from botched shell heredoc / diff exports ----------------
+# (Windows interpreted "C:\..." as a filename; U+F03A glyph in some names)
+_diff*
+__diff*
+C*temp*
+*_old.rs
+devnull
