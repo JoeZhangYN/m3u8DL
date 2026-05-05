@@ -38,6 +38,24 @@ pub async fn fetch_one<C: HttpClient>(
     headers: &HeaderMap,
     work_dir: &Path,
 ) -> Result<FetchedSegment> {
+    let path = work_dir.join(format!("seg-{:06}.ts", seg.idx.0));
+    // Resume hook (Plan D2): if the segment file already exists with non-zero size from a
+    // prior run that crashed mid-job, skip the fetch + decrypt + write. Saves bandwidth on
+    // retry of partial downloads. Conservative check (size > 0) — a 0-byte file is treated
+    // as a half-write artifact and re-fetched. Future hardening: cross-check against
+    // progress.json manifest sizes (Plan D3a/D3b ground); today's check is best-effort
+    // and assumes the file is sound if it's non-empty (typical for completed segments).
+    if let Ok(meta) = tokio::fs::metadata(&path).await
+        && meta.is_file()
+        && meta.len() > 0
+    {
+        return Ok(FetchedSegment {
+            idx: seg.idx,
+            path,
+            bytes_written: meta.len(),
+        });
+    }
+
     let req = HttpRequest::new(seg.url.clone()).with_headers(headers.clone());
     let req = match seg.byte_range {
         Some(br) => {
@@ -70,7 +88,6 @@ pub async fn fetch_one<C: HttpClient>(
         }
     };
 
-    let path = work_dir.join(format!("seg-{:06}.ts", seg.idx.0));
     tokio::fs::write(&path, &plaintext).await?;
     let bytes_written = plaintext.len() as u64;
     Ok(FetchedSegment {
