@@ -2,7 +2,7 @@ use aes::Aes128;
 use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
 use hex_literal::hex;
 
-use m3u8dl_server::adapters::aes_decrypt::decrypt;
+use m3u8dl_server::domain::codec::aes_decrypt::decrypt;
 
 type Aes128CbcEnc = cbc::Encryptor<Aes128>;
 

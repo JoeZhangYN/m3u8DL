@@ -14,7 +14,7 @@ use reqwest::header::HeaderMap;
 use tokio::sync::RwLock;
 use url::Url;
 
-use crate::adapters::{aes_decrypt, png_strip};
+use crate::domain::codec::{aes_decrypt, png_strip};
 use crate::domain::{DownloadError, Encryption, Result, Segment, SegmentIndex};
 use crate::ports::http_client::{HttpClient, HttpRequest};
 use crate::util::url_redact::redact_url;

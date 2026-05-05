@@ -13,7 +13,7 @@ use futures_util::{StreamExt, TryStreamExt, stream};
 use reqwest::header::HeaderMap;
 use url::Url;
 
-use crate::adapters::{m3u8_normalize, png_strip};
+use crate::domain::codec::{m3u8_normalize, png_strip};
 use crate::application::base_url::derive_base_url;
 use crate::application::parser::parse_m3u8;
 use crate::application::segment_fetcher::{fetch_one, new_key_cache};

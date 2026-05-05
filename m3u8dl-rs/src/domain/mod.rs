@@ -1,3 +1,4 @@
+pub mod codec;
 pub mod error;
 pub mod job;
 pub mod m3u8_input;

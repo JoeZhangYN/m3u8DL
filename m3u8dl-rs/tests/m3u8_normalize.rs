@@ -1,4 +1,4 @@
-use m3u8dl_server::adapters::m3u8_normalize::normalize;
+use m3u8dl_server::domain::codec::m3u8_normalize::normalize;
 
 #[test]
 fn appends_endlist_when_missing() {
