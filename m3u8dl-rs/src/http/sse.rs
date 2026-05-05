@@ -34,7 +34,10 @@ pub async fn job_events(
         )
     })?;
 
-    // Snapshot under lock — released before we await on the stream
+    // Snapshot under lock — released before we await on the stream.
+    // Note: SSE intentionally diverges from `lock_or_poisoned` (which panics) — long-lived
+    // streams shouldn't crash the server when one job is poisoned; we return 500 to this
+    // single client and let the rest of the server keep serving. See plan §6.1.
     let snapshot_event = {
         let snap = match h.job.lock() {
             Ok(g) => JobSnapshot::from_job(&g),

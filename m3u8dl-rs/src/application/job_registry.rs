@@ -8,12 +8,21 @@
 //! during state writes and reads, never across `.await`. This lets the broadcast sink's
 //! sync `emit()` write the new state without wrapping itself in `block_on`.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use dashmap::DashMap;
 
 use crate::adapters::broadcast_sink::BroadcastSink;
 use crate::domain::{Job, JobId, JobState};
+
+/// SSOT for "poisoned mutex = bug, panic" policy. The lock MUST NOT be held across `.await`
+/// (see module header comment) — `Job` is `std::sync::Mutex`, intended for nanosecond-scale
+/// state writes/reads. All call sites (routes / set_state / broadcast_sink emit) go through
+/// this helper so the `#[allow(clippy::expect_used)]` lives in exactly one place.
+#[allow(clippy::expect_used)] // poisoned mutex is a logic bug — surface via panic
+pub(crate) fn lock_or_poisoned(m: &Mutex<Job>) -> MutexGuard<'_, Job> {
+    m.lock().expect("job mutex poisoned (logic bug; lock must never be held across .await)")
+}
 
 #[derive(Clone)]
 pub struct JobHandle {
@@ -56,10 +65,9 @@ impl JobRegistry {
 
     /// Apply a state transition to an existing job. No-op if id unknown or current
     /// state is terminal (see `Job::transition_to`).
-    #[allow(clippy::expect_used)] // poisoned mutex = bug; see lock_or_poisoned pattern
     pub fn set_state(&self, id: &JobId, state: JobState) {
         if let Some(h) = self.get(id) {
-            let mut g = h.job.lock().expect("job mutex poisoned");
+            let mut g = lock_or_poisoned(&h.job);
             g.transition_to(state);
         }
     }

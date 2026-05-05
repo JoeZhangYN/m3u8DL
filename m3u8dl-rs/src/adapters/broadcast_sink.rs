@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 
+use crate::application::job_registry::lock_or_poisoned;
 use crate::domain::{Job, ProgressEvent};
 use crate::ports::progress_sink::ProgressSink;
 
@@ -34,9 +35,12 @@ impl ProgressSink for BroadcastSink {
     fn emit(&self, event: ProgressEvent) {
         // 1. mirror to Job.state for polling. Goes through `transition_to` — terminal
         //    states block further mutations (defense vs late stray events).
-        if let Ok(mut g) = self.job.try_lock() {
-            g.transition_to(event.to_job_state());
-        }
+        //    Use `lock_or_poisoned` (blocking) instead of `try_lock`: prior `try_lock`
+        //    silently dropped the mirror under contention, leaving polling clients with
+        //    stale state. The lock is held for nanoseconds and never crosses `.await`.
+        let mut g = lock_or_poisoned(&self.job);
+        g.transition_to(event.to_job_state());
+        drop(g);
         // 2. broadcast for SSE — `Err` only fires when there are no receivers, ignore.
         drop(self.sender.send(event));
     }

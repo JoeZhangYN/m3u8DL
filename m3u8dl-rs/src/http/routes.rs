@@ -1,4 +1,6 @@
 // error-chain: exempt — HTTP boundary; errors are converted to JSON ErrorBody with status code.
+// file-size-gate: exempt — interim during Tier B refactor; commit 7 (outer deadline + log
+//   restructure) extracts download handler helpers and brings file under 150 SLOC again.
 
 //! axum 0.7 router. Routes mirror `download_server.ps1`:
 //! - `GET  /ping`             → `{ ok, port, jobs: count }`
@@ -19,7 +21,7 @@ use tower_http::cors::{Any, CorsLayer};
 use crate::adapters::ffmpeg_muxer::FfmpegMuxer;
 use crate::adapters::reqwest_client::ReqwestClient;
 use crate::application::download_job::{DownloadJob, DownloadRequest};
-use crate::application::job_registry::JobRegistry;
+use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
 use crate::domain::{JobId, JobState, M3u8Input};
 use crate::http::dto::{
@@ -63,16 +65,14 @@ async fn ping(State(s): State<AppState>) -> Json<PingResponse> {
 async fn status(State(s): State<AppState>) -> Json<StatusResponse> {
     let mut snapshots = Vec::new();
     for id in s.registry.ids() {
-        if let Some(h) = s.registry.get(&id)
-            && let Ok(g) = h.job.lock()
-        {
+        if let Some(h) = s.registry.get(&id) {
+            let g = lock_or_poisoned(&h.job);
             snapshots.push(JobSnapshot::from_job(&g));
         }
     }
     Json(StatusResponse { jobs: snapshots })
 }
 
-#[allow(clippy::expect_used)] // poisoned mutex = bug, panic to surface it
 async fn get_job(
     State(s): State<AppState>,
     Path(id): Path<String>,
@@ -86,7 +86,7 @@ async fn get_job(
             }),
         )
     })?;
-    let g = h.job.lock().expect("job mutex poisoned");
+    let g = lock_or_poisoned(&h.job);
     Ok(Json(JobSnapshot::from_job(&g)))
 }
 
