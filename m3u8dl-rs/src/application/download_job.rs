@@ -20,6 +20,7 @@ use url::Url;
 use crate::domain::codec::{m3u8_normalize, png_strip};
 use crate::application::base_url::derive_base_url;
 use crate::application::parser::parse_m3u8;
+use crate::application::progress_manifest::ProgressManifest;
 use crate::application::segment_fetcher::{fetch_one, new_key_cache};
 use crate::domain::{
     DownloadError, M3u8Input, MediaPlaylist, OutputPath, Playlist, ProgressEvent, Result, Variant,
@@ -82,7 +83,22 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
             .await?;
         // OrderedSegments::from_indexed sorts by SegmentIndex — muxer is now type-guaranteed
         // to receive segments in playlist order without trusting the caller.
+        let segs_indices: Vec<u32> = collected.iter().map(|(idx, _)| idx.0).collect();
         let inputs = OrderedSegments::from_indexed(collected);
+
+        // Write progress.json manifest before mux so failure mid-mux preserves the
+        // segment-completion record for post-mortem / future resume. Errors are non-fatal.
+        let manifest = ProgressManifest::try_new(
+            "anonymous".into(), // job_id not threaded through here yet; use placeholder
+            req.source_url.as_ref().map(|u| u.to_string()),
+            segs_indices,
+            total,
+        );
+        if let Ok(m) = manifest {
+            if let Err(e) = m.write_to_dir(&work_dir).await {
+                tracing::warn!(event = "manifest_write_skipped", path = %work_dir.display(), error = %e);
+            }
+        }
 
         sink.emit(ProgressEvent::merging(Some(0.0)));
         let output = self.out_dir.join(format!("{}.mp4", sanitize(&req.title)));
