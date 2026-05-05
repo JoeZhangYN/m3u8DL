@@ -23,11 +23,12 @@
       "id": "a1b2c3d4",
       "title": "《某剧》01",
       "state": "Running",
-      "startedAt": "2026-05-02T10:23:11+08:00",
+      "startedAt": "2026-05-02T02:23:11Z",
       "success": null,
       "output": null,
       "sizeMB": null,
-      "error": null
+      "error": null,
+      "progress": { "phase": "downloading", "done": 12, "total": 187, "bytes": 4915200 }
     }
   ]
 }
@@ -36,6 +37,11 @@
 `state` 取值（兼容老 PowerShell server）：`Queued` / `Running` / `Completed`。
 完成态字段：`success: true` + `output: "<out_dir>/xxx.mp4"` + `sizeMB: 412.3`。
 失败态：`success: false` + `error: "<message>"`。
+`progress` 字段（`Running` 时存在；`Queued`/`Completed` 时省略）：
+- `{ "phase": "parsing" }` — m3u8 解析中
+- `{ "phase": "downloading", "done": N, "total": M, "bytes": B }` — 分片下载中（注：polling 路径不含 `seg_index`，全量见 SSE wire）
+- `{ "phase": "merging", "pct": F }` — ffmpeg 合并中
+所有时间戳走 `chrono::Utc::now().to_rfc3339()`，固定 `Z` 后缀（UTC）。
 
 ### `POST /download`
 入队一个新 job。
@@ -101,6 +107,19 @@ KeepAlive ping 每 30s：`: ping\n\n`（不影响业务事件解析）。
 
 ### `OPTIONS *`
 CORS preflight，返 `204`。
+
+## 日志 / 运维
+
+- 默认 `tracing-subscriber` 文本格式输出到 stderr。设 `M3U8DL_LOG_FORMAT=json` 切换为 JSONL 一行一事件输出，便于 grep / log 聚合。
+- `RUST_LOG` 控制级别（默认 `info,tower_http=warn`）。常用：
+  - `RUST_LOG=debug` — 含 axum HTTP request 入站/出站 span
+  - `RUST_LOG=info,reqwest=warn,m3u8dl_server=debug` — 仅放开本应用 debug
+- 关键 `event` 字段（snake_case，可枚举聚合）：
+  `server_started` / `bind_failed` / `out_dir_fallback` / `proxy_selected` / `proxy_parse_failed`
+  `fetch_retrying` / `fetch_failed` / `ffmpeg_failed` / `ffmpeg_timeout` / `job_failed` / `job_timeout`
+  `sse_subscriber_lagged` / `out_dir_unwritable` / `startup_aborted`
+- URL 在日志中只保留 `host + path`（`util::url_redact`）— 签名 token / hmac 在 query string 不会进 log。
+- 重定向到文件：Windows `m3u8dl-server.exe 2> server.log` / Unix `... 2> server.log`。
 
 ## 浏览器端用法（capture.user.js）
 

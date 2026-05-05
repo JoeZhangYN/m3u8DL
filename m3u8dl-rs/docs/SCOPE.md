@@ -32,8 +32,8 @@
 ### 网络
 - HTTP / HTTPS（rustls，免装 OpenSSL）
 - **零配置 headers** — `capture.user.js` 自动从播放页 `location` 推 `Origin` / `Referer`，POST 时透传给 server；任何 HLS 站无需改代码
-- 失败重试 — 每段独立 4 次 retry（指数退避 250→500→1000→2000ms）
-- 超时 — 单 GET 30s + 连接 10s
+- 失败重试 — 每段独立 3 次重试（共 4 次尝试），指数退避 250→500→1000→2000ms ±50% jitter；4xx / DNS / TLS 等不可重试错误立即失败
+- 超时 — 单 GET 30s + 连接 10s；mux 阶段 `视频时长 × 2 + 60s` deadline；整 job 默认 7200s 上限（env 可调）
 - **Windows 系统代理探测** — 自动读 `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ProxyServer`，三种格式都支持（裸 host:port / `http=...;https=...` / 完整 URL）；socks 代理跳过
 
 ### 输出

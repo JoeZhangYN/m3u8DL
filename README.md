@@ -11,7 +11,7 @@
 
 - 浏览器一键抓取 → 自动 POST 到本机 `127.0.0.1:7787`
 <!-- retry timings (250→2000ms) SOT'd in m3u8dl-rs/src/adapters/reqwest_client.rs::ReqwestClient::fetch_bytes -->
-- **并行分片下载**（默认 16 线程）+ 失败重试（指数退避 250→2000ms × 4）
+- **并行分片下载**（默认 16 线程）+ 失败重试（最多 3 次重试 / 4 次总尝试，指数退避 250→500→1000→2000ms ±50% jitter；4xx 等不可重试错误立即失败）
 - **AES-128-CBC 解密**（HLS 标准加密；key 自动 fetch + 缓存）
 - **master playlist** 自动选最高码率
 - **`#EXT-X-MAP` 初始化段** + **HTTP Range** + **PNG 反爬剥皮**
@@ -168,17 +168,18 @@ m3u8DL/
 ├─ capture.user.js          Tampermonkey 浏览器脚本
 ├─ README.md / LICENSE / .gitignore
 ├─ .github/workflows/ci.yml GitHub Actions CI
-├─ m3u8dl-rs/               Rust 源码 (~2400 SLOC, 25 文件)
+├─ m3u8dl-rs/               Rust 源码 (~2900 SLOC, 36 文件)
 │   ├─ Cargo.toml
 │   ├─ src/
 │   │   ├─ main.rs                CLI bootstrap
-│   │   ├─ config.rs              端口 / 输出目录 / 默认 headers
-│   │   ├─ domain/                类型、不变量、错误（无 IO）
-│   │   ├─ ports/                 trait 抽象 (HttpClient / Muxer / ProgressSink)
+│   │   ├─ config.rs              端口 / 输出目录 / deadline / 默认 headers
+│   │   ├─ domain/                类型、不变量、错误（无 IO）+ codec/ 纯算法
+│   │   ├─ ports/                 trait 抽象 (HttpClient / Muxer / ProgressSink / DownloadOrchestrator)
 │   │   ├─ adapters/              端口实现 (reqwest / ffmpeg / broadcast)
 │   │   ├─ application/           编排 + 解析 + base_url + segment_fetcher
-│   │   └─ http/                  axum routes / dto / sse
-│   ├─ tests/                 13 集成测试 suite
+│   │   ├─ http/                  axum routes / dto / sse / handlers
+│   │   └─ util/                  cross-cutting helpers (url_redact)
+│   ├─ tests/                 14 集成测试 suite + 3 lib 单元测试
 │   └─ docs/SCOPE.md          支持范围 / DRM 不支持原因
 │       + API.md              HTTP 契约
 └─ legacy/                  老 PowerShell 原型 (fallback 备用)
@@ -195,7 +196,11 @@ m3u8DL/
 | `M3U8DL_OUT_DIR` | _(v0.1.1+: 用户 Downloads 下的 `m3u8dl/` 子目录)_ | 输出 mp4 目录（启动时自动 mkdir，失败即退出）。默认值由 [`config.rs::default_out_dir`](m3u8dl-rs/src/config.rs) 解析；历史默认值见 [CHANGELOG](CHANGELOG.md) |
 | `M3U8DL_FFMPEG` | `ffmpeg.exe` | ffmpeg 路径（相对路径会基于 cwd 解析；建议放绝对路径） |
 | `M3U8DL_PARALLELISM` | `16` | 单 job 并行下载分片的 worker 数 |
-| `M3U8DL_RETRIES` | `3` | 单分片失败重试次数（指数退避 250→2000ms） |
+| `M3U8DL_RETRIES` | `3` | 单分片失败重试次数（共 4 次尝试；指数退避 250→2000ms ±50% jitter） |
+| `M3U8DL_LOG_FORMAT` | _(text)_ | 设为 `json` 切换为 JSONL 一行一事件输出，便于 log 聚合 / grep |
+| `M3U8DL_JOB_DEADLINE_SECS` | `7200` | 单 job 总耗时上限（默认 2h）。超时则 kill 子进程 + 标 Failed |
+| `M3U8DL_MUX_DEADLINE_FACTOR` | `2.0` | mux 阶段 deadline 系数：`总时长 × factor + min_secs` |
+| `M3U8DL_MUX_DEADLINE_MIN_SECS` | `60` | mux deadline 下限（短视频不至于刚触发就超时） |
 
 启动示例：
 ```cmd
