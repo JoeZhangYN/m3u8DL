@@ -89,6 +89,9 @@ tokio-test = "0.4"
 hex-literal = "0.4"
 cbc = { version = "0.1", features = ["std"] }
 aes = "0.8"
+# Scope-guarded env var override for tests (M3U8DL_PROXY isolation — prevents CI box
+# system proxy from silently routing wiremock requests through external proxy).
+temp-env = "0.3"
 
 [lints.clippy]
 unwrap_used = "warn"

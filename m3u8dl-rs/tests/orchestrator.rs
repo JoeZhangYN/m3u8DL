@@ -1,3 +1,8 @@
+// file-size-gate: exempt — large e2e suite covering parallel fetch / AES decrypt /
+//   playlist parse / progress events / output validation in one file matches the
+//   existing tests/* pattern. Splitting per-aspect would multiply the wiremock /
+//   AES key / orchestrator-build boilerplate without improving readability.
+
 //! Orchestrator e2e via wiremock + a stub Muxer that just byte-concats inputs.
 //! Verifies: playlist fetch, segment parallel download, AES-128 decrypt, progress events,
 //! output file written + size-gated.
@@ -65,8 +70,11 @@ impl Muxer for ConcatMuxer {
 
 #[allow(clippy::expect_used)] // tests/* helper
 fn build_job(out_dir: PathBuf) -> DownloadJob<ReqwestClient, ConcatMuxer> {
+    let http = temp_env::with_var("M3U8DL_PROXY", Some("none"), || {
+        ReqwestClient::new().expect("client").with_max_retries(2)
+    });
     DownloadJob {
-        http: ReqwestClient::new().expect("client").with_max_retries(2),
+        http,
         muxer: ConcatMuxer,
         out_dir,
         parallelism: 4,

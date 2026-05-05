@@ -20,7 +20,9 @@ use tokio::net::TcpListener;
 #[allow(clippy::expect_used)] // tests/* helper
 async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
-    let http = ReqwestClient::new().expect("client").with_max_retries(0);
+    let http = temp_env::with_var("M3U8DL_PROXY", Some("none"), || {
+        ReqwestClient::new().expect("client").with_max_retries(0)
+    });
     let muxer = FfmpegMuxer::new(PathBuf::from("nonexistent-ffmpeg.exe"), 2.0, 60);
     let job: Arc<dyn DownloadOrchestrator> = Arc::new(DownloadJob {
         http,

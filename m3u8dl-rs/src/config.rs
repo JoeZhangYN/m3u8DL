@@ -132,6 +132,25 @@ fn default_out_dir() -> String {
     }
 }
 
+#[allow(clippy::expect_used)] // static literal headers — if these don't parse, the source is broken
+static DEFAULT_HEADERS: LazyLock<HeaderMap> = LazyLock::new(|| {
+    let mut h = HeaderMap::new();
+    h.insert(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0"
+            .parse()
+            .expect("UA literal valid"),
+    );
+    h.insert("Accept", "*/*".parse().expect("Accept literal valid"));
+    h.insert(
+        "Accept-Language",
+        "zh-CN,zh;q=0.9,en;q=0.8"
+            .parse()
+            .expect("Accept-Language literal valid"),
+    );
+    h
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,22 +178,3 @@ mod tests {
         assert!(result.ends_with("m3u8dl"), "expected suffix m3u8dl, got: {result}");
     }
 }
-
-#[allow(clippy::expect_used)] // static literal headers — if these don't parse, the source is broken
-static DEFAULT_HEADERS: LazyLock<HeaderMap> = LazyLock::new(|| {
-    let mut h = HeaderMap::new();
-    h.insert(
-        "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0"
-            .parse()
-            .expect("UA literal valid"),
-    );
-    h.insert("Accept", "*/*".parse().expect("Accept literal valid"));
-    h.insert(
-        "Accept-Language",
-        "zh-CN,zh;q=0.9,en;q=0.8"
-            .parse()
-            .expect("Accept-Language literal valid"),
-    );
-    h
-});

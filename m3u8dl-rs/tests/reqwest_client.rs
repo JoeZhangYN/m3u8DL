@@ -9,9 +9,13 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 #[allow(clippy::expect_used)] // helper for #[tokio::test] fns; clippy's allow-expect-in-tests
 // doesn't see free-standing helpers in tests/*.rs (only `#[cfg(test)]`)
 fn make_client(retries: u32) -> ReqwestClient {
-    ReqwestClient::new()
-        .expect("client")
-        .with_max_retries(retries)
+    // Scope-guard M3U8DL_PROXY so a CI box with a system proxy set doesn't silently
+    // route wiremock requests through it (Tier C audit-resilience finding).
+    temp_env::with_var("M3U8DL_PROXY", Some("none"), || {
+        ReqwestClient::new()
+            .expect("client")
+            .with_max_retries(retries)
+    })
 }
 
 #[tokio::test]
