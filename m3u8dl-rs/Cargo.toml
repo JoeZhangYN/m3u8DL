@@ -71,6 +71,9 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 # Per-user well-known directories (Downloads, Config, ...) — Windows: SHGetKnownFolderPath
 dirs = "5"
 
+# Jitter for retry backoff (avoid thundering herd on shared CDN failures)
+rand = "0.9"
+
 [target.'cfg(windows)'.dependencies]
 # WinINET registry read for system proxy detection (HKCU\...\Internet Settings\ProxyServer)
 winreg = "0.52"

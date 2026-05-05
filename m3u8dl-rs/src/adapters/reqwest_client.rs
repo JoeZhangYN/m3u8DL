@@ -1,17 +1,36 @@
 //! `HttpClient` impl backed by `reqwest` with exponential-backoff retry.
 //!
-//! Retry policy: `max_retries = 3` total, backoff 250→500→1000→2000ms (capped at 2s).
-//! All HTTP failures (network error or non-2xx status) trigger retry; only the final attempt
-//! returns an error to the caller.
+//! Retry policy: `max_retries = 3` retries (4 total attempts), backoff 250→500→1000→2000ms
+//! capped at 2s, with ±50% jitter to avoid thundering-herd on shared CDN failures.
+//! Only retryable errors trigger retry — see `is_retryable`. Permanent errors (4xx, DNS,
+//! TLS handshake) return immediately on attempt 1.
 
 use std::time::Duration;
 
 use bytes::Bytes;
 
 use crate::adapters::system_proxy;
-use crate::domain::Result;
+use crate::domain::{DownloadError, Result};
 use crate::ports::http_client::{HttpClient, HttpRequest};
 use crate::util::url_redact::redact_url;
+
+/// Classify a `DownloadError` for retry: only transient transport + 5xx + 429 are retryable.
+/// Permanent client errors (4xx other than 429), DNS resolution failure (NXDOMAIN), and TLS
+/// handshake errors fail immediately so callers don't waste backoff budget on guaranteed
+/// failures (audit-resilience.retry-non-retryable-errors FAIL). `fetch_once` only ever
+/// returns `Network(reqwest::Error)` — other variants short-circuit to `false` defensively.
+fn is_retryable_err(e: &DownloadError) -> bool {
+    let DownloadError::Network(re) = e else {
+        return false;
+    };
+    if re.is_timeout() || re.is_connect() || re.is_request() {
+        return true;
+    }
+    if let Some(s) = re.status() {
+        return s.is_server_error() || s == reqwest::StatusCode::TOO_MANY_REQUESTS;
+    }
+    false
+}
 
 #[derive(Clone)]
 pub struct ReqwestClient {
@@ -88,22 +107,25 @@ impl ReqwestClient {
 
 impl HttpClient for ReqwestClient {
     async fn fetch_bytes(&self, req: HttpRequest) -> Result<Bytes> {
-        // SOT for retry backoff timings (250 → 500 → 1000 → 2000ms cap, max_retries=3 attempts).
-        // Synced doc copies: README.md "Q&A" / "✨ 特性" + m3u8dl-rs/docs/SCOPE.md "网络". Update those if changed.
+        // SOT for retry backoff timings (max_retries=3 retries → 4 total attempts; backoff
+        // 250 → 500 → 1000 → 2000ms cap with ±50% jitter; non-retryable errors fail fast).
+        // Synced doc copies: README.md "✨ 特性" + m3u8dl-rs/docs/SCOPE.md "网络". Update those if changed.
         let mut backoff_ms = 250u64;
         let mut attempt = 0u32;
         loop {
             match self.fetch_once(&req).await {
                 Ok(bytes) => return Ok(bytes),
-                Err(e) if attempt < self.max_retries => {
+                Err(e) if attempt < self.max_retries && is_retryable_err(&e) => {
+                    let jitter = 0.5 + rand::random::<f64>(); // 0.5..=1.5
+                    let actual_ms = (backoff_ms as f64 * jitter) as u64;
                     tracing::warn!(
                         url = %redact_url(&req.url),
                         attempt,
-                        backoff_ms,
+                        backoff_ms = actual_ms,
                         error = %e,
                         "fetch failed, retrying"
                     );
-                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    tokio::time::sleep(Duration::from_millis(actual_ms)).await;
                     backoff_ms = backoff_ms.saturating_mul(2).min(2000);
                     attempt += 1;
                 }
@@ -111,8 +133,9 @@ impl HttpClient for ReqwestClient {
                     tracing::error!(
                         url = %redact_url(&req.url),
                         total_attempts = attempt + 1,
+                        retryable = is_retryable_err(&e),
                         error = %e,
-                        "fetch exhausted retries"
+                        "fetch failed (terminal)"
                     );
                     return Err(e);
                 }

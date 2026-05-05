@@ -1050,6 +1050,7 @@ dependencies = [
  "hex-literal",
  "m3u8-rs",
  "proptest",
+ "rand",
  "regex",
  "reqwest",
  "serde",
