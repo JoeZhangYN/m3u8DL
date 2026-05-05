@@ -34,6 +34,12 @@ pub struct DownloadRequestBody {
     /// anti-hotlink headers because it is on the playing page; we just forward them.
     #[serde(default)]
     pub headers: Option<HashMap<String, String>>,
+    /// Optional Idempotency-Key (8..=128 chars). Two POSTs with the same key within
+    /// `M3U8DL_IDEMPOTENCY_TTL_SECS` (default 300s) → server returns the same JobId
+    /// instead of starting a duplicate download. When omitted, the server derives a
+    /// default key from `sha256(url + sorted_headers)`.
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

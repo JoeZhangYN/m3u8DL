@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use m3u8dl_server::adapters::{ffmpeg_muxer::FfmpegMuxer, reqwest_client::ReqwestClient};
 use m3u8dl_server::application::download_job::DownloadJob;
+use m3u8dl_server::application::idempotency::IdempotencyTable;
 use m3u8dl_server::application::job_registry::JobRegistry;
 use m3u8dl_server::config::Config;
 use m3u8dl_server::http::routes::{AppState, router};
@@ -56,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
         job,
         registry: JobRegistry::new(),
         config: cfg,
+        idempotency: IdempotencyTable::new(),
     };
     let app = router(state);
 

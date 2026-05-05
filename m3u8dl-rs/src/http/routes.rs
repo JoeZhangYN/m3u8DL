@@ -24,6 +24,7 @@ use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::Level;
 
 use crate::application::download_job::DownloadRequest;
+use crate::application::idempotency::IdempotencyTable;
 use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
 use crate::domain::{JobId, M3u8Input};
@@ -31,7 +32,10 @@ use crate::http::dto::{
     API_VERSION, DownloadAccepted, DownloadRequestBody, ErrorBody, JobSnapshot, PingResponse,
     StatusResponse,
 };
-use crate::http::handlers::{build_outbound_headers, spawn_download_task};
+use crate::http::handlers::{
+    build_outbound_headers, record_idempotent, resolve_idempotency_key, spawn_download_task,
+    try_idempotent_response,
+};
 use crate::ports::orchestrator::DownloadOrchestrator;
 
 #[derive(Clone)]
@@ -41,6 +45,9 @@ pub struct AppState {
     pub job: Arc<dyn DownloadOrchestrator>,
     pub registry: JobRegistry,
     pub config: Config,
+    /// Server-side dedupe table for `Idempotency-Key`. Plan D1b: same key within
+    /// `config.idempotency_ttl_secs` returns the same JobId instead of starting a duplicate.
+    pub idempotency: IdempotencyTable,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -104,10 +111,15 @@ async fn download(
     State(s): State<AppState>,
     Json(body): Json<DownloadRequestBody>,
 ) -> Result<(StatusCode, Json<DownloadAccepted>), (StatusCode, Json<ErrorBody>)> {
+    // Idempotency-Key dedupe: client-supplied or server-derived; lookup; cached hit
+    // returns existing JobId. See handlers.rs for derivation SOT.
+    let key = resolve_idempotency_key(&body)?;
+    if let Some(cached) = try_idempotent_response(&s, &key) {
+        return Ok(cached);
+    }
     let id = JobId::new();
     let title = body.title.clone().unwrap_or_else(|| format!("video_{id}"));
     let source_url = body.url.as_deref().and_then(|u| url::Url::parse(u).ok());
-    // `M3u8Input::detect` is the single point of input classification (incl. empty check).
     let input = M3u8Input::detect(&body.m3u8).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -118,6 +130,7 @@ async fn download(
     let headers = build_outbound_headers(&s.config, &body);
     let req = DownloadRequest { input, source_url, title: title.clone(), headers };
     spawn_download_task(&s, id.clone(), req, handle);
+    record_idempotent(&s, key, id.clone(), title.clone());
     Ok((
         StatusCode::ACCEPTED,
         Json(DownloadAccepted {

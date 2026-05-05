@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use m3u8dl_server::adapters::reqwest_client::ReqwestClient;
 use m3u8dl_server::application::download_job::DownloadJob;
+use m3u8dl_server::application::idempotency::IdempotencyTable;
 use m3u8dl_server::application::job_registry::JobRegistry;
 use m3u8dl_server::config::Config;
 use m3u8dl_server::http::routes::{AppState, router};
@@ -45,6 +46,7 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
         job,
         registry: JobRegistry::new(),
         config: cfg,
+        idempotency: IdempotencyTable::new(),
     };
     let app = router(state);
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind");

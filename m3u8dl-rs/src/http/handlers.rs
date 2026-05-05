@@ -2,17 +2,73 @@
 //! with outer deadline. Split out of routes.rs to keep the router file under the SLOC cap.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use axum::http::StatusCode;
+use axum::Json;
 use reqwest::header::HeaderMap;
 
 use crate::application::download_job::DownloadRequest;
+use crate::application::idempotency::{IdempotencyEntry, IdempotencyKey, IdempotencyKeyError};
 use crate::application::job_registry::JobHandle;
 use crate::config::Config;
 use crate::domain::{DownloadError, JobId, JobState};
-use crate::http::dto::DownloadRequestBody;
+use crate::http::dto::{DownloadAccepted, DownloadRequestBody, ErrorBody};
 use crate::http::routes::AppState;
 use crate::ports::progress_sink::ProgressSink;
+
+/// Resolve an idempotency key from request body: if client supplied one, validate it;
+/// otherwise derive the default `sha256(url + sorted_headers)` key. Returns either a
+/// validated `IdempotencyKey` or a 400 response payload.
+pub(crate) fn resolve_idempotency_key(
+    body: &DownloadRequestBody,
+) -> Result<IdempotencyKey, (StatusCode, Json<ErrorBody>)> {
+    match body.idempotency_key.as_deref() {
+        Some(supplied) => IdempotencyKey::try_from(supplied).map_err(|e: IdempotencyKeyError| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody { error: e.to_string() }),
+            )
+        }),
+        None => {
+            let url = body.url.as_deref().unwrap_or("");
+            let empty = std::collections::HashMap::new();
+            let headers = body.headers.as_ref().unwrap_or(&empty);
+            Ok(IdempotencyKey::derive_default(url, headers))
+        }
+    }
+}
+
+/// Look up `key` in the table; if a fresh entry exists, return the cached 202 response.
+/// `None` → caller proceeds with normal job creation.
+pub(crate) fn try_idempotent_response(
+    s: &AppState,
+    key: &IdempotencyKey,
+) -> Option<(StatusCode, Json<DownloadAccepted>)> {
+    let ttl = Duration::from_secs(s.config.idempotency_ttl_secs);
+    let entry = s.idempotency.lookup_fresh(key, Instant::now(), ttl)?;
+    tracing::info!(
+        event = "idempotent_hit",
+        job_id = %entry.job_id,
+        key = key.as_str(),
+        "returning cached jobId for repeat POST"
+    );
+    Some((
+        StatusCode::ACCEPTED,
+        Json(DownloadAccepted {
+            job_id: entry.job_id.as_str().to_string(),
+            status: "queued",
+            title: entry.title,
+        }),
+    ))
+}
+
+/// Persist a fresh job's idempotency mapping so subsequent identical POSTs hit
+/// `try_idempotent_response`.
+pub(crate) fn record_idempotent(s: &AppState, key: IdempotencyKey, job_id: JobId, title: String) {
+    s.idempotency
+        .insert(key, IdempotencyEntry::new(job_id, title));
+}
 
 /// Build the outgoing-fetch headers: defaults (UA / Accept) + client-supplied
 /// (Origin / Referer / Cookie). Client wins on conflicts. Allowlist (`is_allowed_header`)

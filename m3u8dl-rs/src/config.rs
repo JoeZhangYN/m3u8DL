@@ -39,6 +39,10 @@ pub struct Config {
     /// is generous against IO stalls without being so loose that hung children linger.
     pub mux_deadline_factor: f64,
     pub mux_deadline_min_secs: u64,
+    /// Idempotency-Key TTL (seconds). Two POSTs with the same key within this window
+    /// return the same JobId. Default 300s = 5min — enough to cover client retry storms
+    /// without holding state forever.
+    pub idempotency_ttl_secs: u64,
     /// Site-agnostic baseline headers. Per-request `Origin` / `Referer` come from the client.
     pub default_headers: HeaderMap,
 }
@@ -54,6 +58,7 @@ impl Default for Config {
             job_deadline_secs: env_or("M3U8DL_JOB_DEADLINE_SECS", 7200),
             mux_deadline_factor: env_or("M3U8DL_MUX_DEADLINE_FACTOR", 2.0),
             mux_deadline_min_secs: env_or("M3U8DL_MUX_DEADLINE_MIN_SECS", 60),
+            idempotency_ttl_secs: env_or("M3U8DL_IDEMPOTENCY_TTL_SECS", 300),
             default_headers: DEFAULT_HEADERS.clone(),
         }
     }
