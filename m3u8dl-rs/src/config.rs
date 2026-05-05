@@ -84,7 +84,9 @@ const fn default_ffmpeg_name() -> &'static str {
 
 /// Pure decision: `Some(downloads)` → append `m3u8dl/` subfolder; `None` → use the provided fallback.
 /// No IO, no env reads, no logging — testable by direct injection.
-fn default_out_dir_from(downloads: Option<PathBuf>, fallback: &Path) -> String {
+/// `pub(crate)` so the adjacent `#[cfg(test)] mod tests` can call the production fn directly
+/// (rather than mirroring its body in tests/, which was the audit's test-gate Critical finding).
+pub(crate) fn default_out_dir_from(downloads: Option<PathBuf>, fallback: &Path) -> String {
     match downloads {
         Some(p) => p.join("m3u8dl").to_string_lossy().into_owned(),
         None => fallback.to_string_lossy().into_owned(),
@@ -127,6 +129,34 @@ fn default_out_dir() -> String {
             );
             resolved
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_out_dir_from_some_appends_m3u8dl_subdir() {
+        let result = default_out_dir_from(Some(PathBuf::from("/tmp/dl")), Path::new("/unused"));
+        assert!(result.ends_with("m3u8dl"), "expected suffix m3u8dl, got: {result}");
+        assert!(result.starts_with("/tmp/dl"), "expected prefix /tmp/dl, got: {result}");
+    }
+
+    #[test]
+    fn default_out_dir_from_none_uses_provided_fallback() {
+        let result = default_out_dir_from(None, Path::new("/abs/fallback"));
+        assert_eq!(result, "/abs/fallback");
+    }
+
+    #[test]
+    fn default_out_dir_from_handles_unicode_path() {
+        let result = default_out_dir_from(
+            Some(PathBuf::from("/Users/张三/Downloads")),
+            Path::new("/unused"),
+        );
+        assert!(result.contains("张三"), "Unicode round-trip failed: {result}");
+        assert!(result.ends_with("m3u8dl"), "expected suffix m3u8dl, got: {result}");
     }
 }
 
