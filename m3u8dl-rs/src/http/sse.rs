@@ -15,6 +15,7 @@ use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_util::{Stream, StreamExt, stream};
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::domain::JobId;
 use crate::http::dto::{ErrorBody, JobSnapshot};
@@ -56,9 +57,18 @@ pub async fn job_events(
             .unwrap_or_else(|_| Event::default().data("{\"error\":\"snapshot serialize failed\"}"))
     };
 
-    let live = BroadcastStream::new(h.sink.subscribe()).filter_map(|r| async move {
-        let ev = r.ok()?;
-        Event::default().event("progress").json_data(ev).ok()
+    let job_id_for_log = job_id.clone();
+    let live = BroadcastStream::new(h.sink.subscribe()).filter_map(move |r| {
+        let id = job_id_for_log.clone();
+        async move {
+            match r {
+                Ok(ev) => Event::default().event("progress").json_data(ev).ok(),
+                Err(BroadcastStreamRecvError::Lagged(n)) => {
+                    tracing::warn!(event = "sse_subscriber_lagged", job_id = %id, skipped = n);
+                    None
+                }
+            }
+        }
     });
 
     let combined = stream::once(async move { snapshot_event })

@@ -55,27 +55,31 @@ impl ReqwestClient {
             .map(|s| s.trim().to_string())
         {
             Some(v) if v.eq_ignore_ascii_case("none") || v.is_empty() => {
-                tracing::info!("proxy: disabled via M3U8DL_PROXY={}", v);
+                tracing::info!(event = "proxy_selected", source = "env_explicit_none", value = %v);
                 builder = builder.no_proxy();
             }
             Some(v) => match reqwest::Proxy::all(&v) {
                 Ok(proxy) => {
-                    tracing::info!("proxy: M3U8DL_PROXY={}", v);
+                    tracing::info!(event = "proxy_selected", source = "env_url", value = %v);
                     builder = builder.proxy(proxy);
                 }
-                Err(e) => tracing::warn!("proxy: M3U8DL_PROXY={} parse failed ({e}), ignoring", v),
+                Err(e) => tracing::warn!(
+                    event = "proxy_parse_failed", source = "env_url", value = %v, error = %e,
+                    "ignoring M3U8DL_PROXY"
+                ),
             },
             None => match system_proxy::detect_system_proxy() {
                 Some(url) => match reqwest::Proxy::all(url.as_str()) {
                     Ok(proxy) => {
-                        tracing::info!("proxy: system proxy {url}");
+                        tracing::info!(event = "proxy_selected", source = "system", url = %url);
                         builder = builder.no_proxy().proxy(proxy);
                     }
-                    Err(e) => {
-                        tracing::warn!("proxy: system proxy {url} parse failed ({e}), going direct")
-                    }
+                    Err(e) => tracing::warn!(
+                        event = "proxy_parse_failed", source = "system", url = %url, error = %e,
+                        "going direct"
+                    ),
                 },
-                None => tracing::info!("proxy: none (no system proxy, no M3U8DL_PROXY)"),
+                None => tracing::info!(event = "proxy_selected", source = "none"),
             },
         }
 

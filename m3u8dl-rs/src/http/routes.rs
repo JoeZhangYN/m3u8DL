@@ -1,14 +1,17 @@
 // error-chain: exempt — HTTP boundary; errors are converted to JSON ErrorBody with status code.
-// file-size-gate: exempt — interim during Tier B refactor; commit 7 (outer deadline + log
-//   restructure) extracts download handler helpers and brings file under 150 SLOC again.
 
 //! axum 0.7 router. Routes mirror `download_server.ps1`:
 //! - `GET  /ping`             → `{ ok, port, jobs: count }`
 //! - `GET  /status`           → `{ jobs: [snapshot…] }`
 //! - `POST /download`         → 202 `{ jobId, status:"queued", title }`
 //! - `GET  /job/:id`          → snapshot or 404
+//! - `GET  /events/:id`       → text/event-stream (SSE)
 //!
 //! CORS: `Access-Control-Allow-Origin: *` (server only listens on 127.0.0.1).
+//! Tracing: `tower_http::TraceLayer` mounted at debug span level so request
+//! enter/exit lines are visible only with `RUST_LOG=debug` (avoids info-flood).
+//! Helpers (header allowlist, outbound-header build, spawn task with deadline)
+//! live in `crate::http::handlers` to keep this file under 150 SLOC.
 
 use std::sync::Arc;
 
@@ -17,17 +20,19 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tracing::Level;
 
 use crate::adapters::ffmpeg_muxer::FfmpegMuxer;
 use crate::adapters::reqwest_client::ReqwestClient;
 use crate::application::download_job::{DownloadJob, DownloadRequest};
 use crate::application::job_registry::{JobRegistry, lock_or_poisoned};
 use crate::config::Config;
-use crate::domain::{JobId, JobState, M3u8Input};
+use crate::domain::{JobId, M3u8Input};
 use crate::http::dto::{
     DownloadAccepted, DownloadRequestBody, ErrorBody, JobSnapshot, PingResponse, StatusResponse,
 };
-use crate::ports::progress_sink::ProgressSink;
+use crate::http::handlers::{build_outbound_headers, spawn_download_task};
 
 pub type Job = DownloadJob<ReqwestClient, FfmpegMuxer>;
 
@@ -45,6 +50,10 @@ pub fn router(state: AppState) -> Router {
         .route("/download", post(download))
         .route("/job/:id", get(get_job))
         .route("/events/:id", get(crate::http::sse::job_events))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::DEBUG)),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -95,74 +104,19 @@ async fn download(
     Json(body): Json<DownloadRequestBody>,
 ) -> Result<(StatusCode, Json<DownloadAccepted>), (StatusCode, Json<ErrorBody>)> {
     let id = JobId::new();
-    let title = body.title.unwrap_or_else(|| format!("video_{id}"));
+    let title = body.title.clone().unwrap_or_else(|| format!("video_{id}"));
     let source_url = body.url.as_deref().and_then(|u| url::Url::parse(u).ok());
     // `M3u8Input::detect` is the single point of input classification (incl. empty check).
-    let input = match M3u8Input::detect(&body.m3u8) {
-        Ok(i) => i,
-        Err(e) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorBody {
-                    error: e.to_string(),
-                }),
-            ));
-        }
-    };
+    let input = M3u8Input::detect(&body.m3u8).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorBody { error: e.to_string() }),
+        )
+    })?;
     let handle = s.registry.register(id.clone(), title.clone());
-
-    // Build the outgoing-fetch headers: defaults (UA / Accept) + client-supplied
-    // (Origin / Referer / Cookie). Client wins on conflicts. Allowlist: only forward
-    // headers we know are safe for upstream HLS fetches — defense in depth even though
-    // the server only listens on 127.0.0.1.
-    let mut headers = s.config.default_headers.clone();
-    if let Some(client_headers) = body.headers {
-        for (k, v) in client_headers {
-            if !is_allowed_header(&k) {
-                continue;
-            }
-            if let (Ok(name), Ok(value)) = (
-                reqwest::header::HeaderName::from_bytes(k.as_bytes()),
-                reqwest::header::HeaderValue::from_str(&v),
-            ) {
-                headers.insert(name, value);
-            }
-        }
-    } else if let Some(page) = body.page.as_deref()
-        && let Ok(page_url) = url::Url::parse(page)
-    {
-        if let Ok(origin) =
-            reqwest::header::HeaderValue::from_str(&page_url.origin().ascii_serialization())
-        {
-            headers.insert(reqwest::header::ORIGIN, origin);
-        }
-        if let Ok(referer) = reqwest::header::HeaderValue::from_str(page) {
-            headers.insert(reqwest::header::REFERER, referer);
-        }
-    }
-
-    let req = DownloadRequest {
-        input,
-        source_url,
-        title: title.clone(),
-        headers,
-    };
-    let job_runner = s.job.clone();
-    let sink_arc: Arc<dyn ProgressSink> = Arc::new(handle.sink.clone());
-    let registry = s.registry.clone();
-    let id_for_task = id.clone();
-    tokio::spawn(async move {
-        let final_state = match job_runner.run(req, sink_arc).await {
-            Ok((output, size_mb)) => JobState::Done { output, size_mb },
-            Err(e) => {
-                tracing::error!(job_id = %id_for_task, error = %e, "download job failed");
-                JobState::Failed {
-                    error: e.to_string(),
-                }
-            }
-        };
-        registry.set_state(&id_for_task, final_state);
-    });
+    let headers = build_outbound_headers(&s.config, &body);
+    let req = DownloadRequest { input, source_url, title: title.clone(), headers };
+    spawn_download_task(&s, id.clone(), req, handle);
     Ok((
         StatusCode::ACCEPTED,
         Json(DownloadAccepted {
@@ -171,19 +125,4 @@ async fn download(
             title,
         }),
     ))
-}
-
-/// Allowlist of headers that the client may set on upstream fetches.
-/// Anything else (e.g. `Authorization`, `Host`, `Content-Length`) is dropped.
-fn is_allowed_header(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        "origin"
-            | "referer"
-            | "cookie"
-            | "user-agent"
-            | "accept"
-            | "accept-language"
-            | "x-forwarded-for"
-    )
 }
