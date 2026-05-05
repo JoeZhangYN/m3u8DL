@@ -11,6 +11,7 @@ use bytes::Bytes;
 use crate::adapters::system_proxy;
 use crate::domain::Result;
 use crate::ports::http_client::{HttpClient, HttpRequest};
+use crate::util::url_redact::redact_url;
 
 #[derive(Clone)]
 pub struct ReqwestClient {
@@ -96,7 +97,7 @@ impl HttpClient for ReqwestClient {
                 Ok(bytes) => return Ok(bytes),
                 Err(e) if attempt < self.max_retries => {
                     tracing::warn!(
-                        url = %req.url,
+                        url = %redact_url(&req.url),
                         attempt,
                         backoff_ms,
                         error = %e,
@@ -108,7 +109,7 @@ impl HttpClient for ReqwestClient {
                 }
                 Err(e) => {
                     tracing::error!(
-                        url = %req.url,
+                        url = %redact_url(&req.url),
                         total_attempts = attempt + 1,
                         error = %e,
                         "fetch exhausted retries"

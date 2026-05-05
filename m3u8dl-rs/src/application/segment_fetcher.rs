@@ -17,6 +17,7 @@ use url::Url;
 use crate::adapters::{aes_decrypt, png_strip};
 use crate::domain::{DownloadError, Encryption, Result, Segment, SegmentIndex};
 use crate::ports::http_client::{HttpClient, HttpRequest};
+use crate::util::url_redact::redact_url;
 
 pub struct FetchedSegment {
     pub idx: SegmentIndex,
@@ -58,7 +59,8 @@ pub async fn fetch_one<C: HttpClient>(
             let key_bytes = resolve_key(http, key_cache, &key_uri, headers).await?;
             if key_bytes.len() != 16 {
                 return Err(DownloadError::Decrypt(format!(
-                    "key from {key_uri} is {} bytes, expected 16",
+                    "key from {} is {} bytes, expected 16",
+                    redact_url(&key_uri),
                     key_bytes.len()
                 )));
             }
