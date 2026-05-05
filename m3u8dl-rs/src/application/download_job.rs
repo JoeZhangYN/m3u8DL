@@ -66,8 +66,8 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
                 async move {
                     let f = fetch_one(seg, http, &key_cache, &headers, &work_dir).await?;
                     let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
-                    let total_b = bytes_total.fetch_add(f.bytes_written, Ordering::SeqCst)
-                        + f.bytes_written;
+                    let total_b =
+                        bytes_total.fetch_add(f.bytes_written, Ordering::SeqCst) + f.bytes_written;
                     sink.emit(ProgressEvent::downloading(n, total, total_b, f.idx.0));
                     Ok::<_, DownloadError>((f.idx, f.path))
                 }
@@ -82,7 +82,9 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
         sink.emit(ProgressEvent::merging(Some(0.0)));
         let output = self.out_dir.join(format!("{}.mp4", sanitize(&req.title)));
         tokio::fs::create_dir_all(&self.out_dir).await?;
-        self.muxer.mux(&inputs, &output, total_dur, sink.as_ref()).await?;
+        self.muxer
+            .mux(&inputs, &output, total_dur, sink.as_ref())
+            .await?;
 
         // OutputPath::try_validate enforces "file exists + size >= 1024" at the type
         // boundary — ANY OutputPath value downstream is guaranteed valid by construction.
@@ -92,8 +94,9 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
     }
 
     async fn resolve_media(&self, req: &DownloadRequest) -> Result<MediaPlaylist> {
-        let (raw_text, base) =
-            self.fetch_playlist(&req.input, req.source_url.as_ref(), &req.headers).await?;
+        let (raw_text, base) = self
+            .fetch_playlist(&req.input, req.source_url.as_ref(), &req.headers)
+            .await?;
         let stripped = png_strip::strip_png_wrapper(&raw_text);
         let normalized = m3u8_normalize::normalize(&String::from_utf8_lossy(stripped));
         match parse_m3u8(normalized.as_bytes(), base.as_ref())? {
@@ -124,14 +127,20 @@ impl<C: HttpClient + 'static, M: Muxer + 'static> DownloadJob<C, M> {
                 let bytes = tokio::fs::read(p).await?;
                 // Derive a `file:///<dir>/` base from the playlist's parent so relative
                 // segment paths inside the playlist resolve against disk locations.
-                let base = p.canonicalize().ok()
+                let base = p
+                    .canonicalize()
+                    .ok()
                     .and_then(|abs| abs.parent().and_then(|d| Url::from_directory_path(d).ok()));
                 Ok((bytes, base))
             }
         }
     }
 
-    async fn resolve_variant(&self, variants: Vec<Variant>, headers: &HeaderMap) -> Result<MediaPlaylist> {
+    async fn resolve_variant(
+        &self,
+        variants: Vec<Variant>,
+        headers: &HeaderMap,
+    ) -> Result<MediaPlaylist> {
         let best = variants
             .into_iter()
             .max_by_key(|v| v.bandwidth)

@@ -24,7 +24,9 @@ pub struct FfmpegMuxer {
 }
 
 impl FfmpegMuxer {
-    pub fn new(ffmpeg_path: PathBuf) -> Self { Self { ffmpeg_path } }
+    pub fn new(ffmpeg_path: PathBuf) -> Self {
+        Self { ffmpeg_path }
+    }
 }
 
 impl Muxer for FfmpegMuxer {
@@ -36,28 +38,49 @@ impl Muxer for FfmpegMuxer {
         sink: &dyn ProgressSink,
     ) -> Result<()> {
         if inputs.is_empty() {
-            return Err(DownloadError::Ffmpeg { code: -1, stderr: "no input segments".into() });
+            return Err(DownloadError::Ffmpeg {
+                code: -1,
+                stderr: "no input segments".into(),
+            });
         }
 
-        let work_dir = output
-            .parent()
-            .ok_or_else(|| DownloadError::Ffmpeg { code: -1, stderr: "output has no parent dir".into() })?;
+        let work_dir = output.parent().ok_or_else(|| DownloadError::Ffmpeg {
+            code: -1,
+            stderr: "output has no parent dir".into(),
+        })?;
         tokio::fs::create_dir_all(work_dir).await?;
         let concat_path = work_dir.join("concat.txt");
         write_concat_list(&concat_path, inputs.paths()).await?;
 
         let mut child = Command::new(&self.ffmpeg_path)
             .args([
-                "-y", "-hide_banner", "-loglevel", "error",
-                "-f", "concat", "-safe", "0", "-i",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
             ])
             .arg(&concat_path)
-            .args(["-c", "copy", "-bsf:a", "aac_adtstoasc", "-progress", "pipe:2"])
+            .args([
+                "-c",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+                "-progress",
+                "pipe:2",
+            ])
             .arg(output)
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| DownloadError::Ffmpeg { code: -1, stderr: format!("spawn ffmpeg: {e}") })?;
+            .map_err(|e| DownloadError::Ffmpeg {
+                code: -1,
+                stderr: format!("spawn ffmpeg: {e}"),
+            })?;
 
         let stderr = child.stderr.take().ok_or_else(|| DownloadError::Ffmpeg {
             code: -1,
@@ -85,7 +108,11 @@ impl Muxer for FfmpegMuxer {
 
         let status = child.wait().await?;
         if !status.success() {
-            let stderr_msg = if error_lines.is_empty() { "(no stderr)".into() } else { error_lines.join("\n") };
+            let stderr_msg = if error_lines.is_empty() {
+                "(no stderr)".into()
+            } else {
+                error_lines.join("\n")
+            };
             return Err(DownloadError::Ffmpeg {
                 code: status.code().unwrap_or(-1),
                 stderr: stderr_msg,

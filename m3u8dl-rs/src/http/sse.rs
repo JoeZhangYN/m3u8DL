@@ -28,7 +28,9 @@ pub async fn job_events(
     let h = s.registry.get(&job_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ErrorBody { error: format!("job {job_id} not found") }),
+            Json(ErrorBody {
+                error: format!("job {job_id} not found"),
+            }),
         )
     })?;
 
@@ -39,7 +41,9 @@ pub async fn job_events(
             Err(_) => {
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorBody { error: "job mutex poisoned".into() }),
+                    Json(ErrorBody {
+                        error: "job mutex poisoned".into(),
+                    }),
                 ));
             }
         };
@@ -54,7 +58,13 @@ pub async fn job_events(
         Event::default().event("progress").json_data(ev).ok()
     });
 
-    let combined = stream::once(async move { snapshot_event }).chain(live).map(Ok::<_, Infallible>);
+    let combined = stream::once(async move { snapshot_event })
+        .chain(live)
+        .map(Ok::<_, Infallible>);
 
-    Ok(Sse::new(combined).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)).text("ping")))
+    Ok(Sse::new(combined).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(30))
+            .text("ping"),
+    ))
 }

@@ -26,7 +26,9 @@ pub struct FetchedSegment {
 
 pub type KeyCache = Arc<RwLock<HashMap<Url, Bytes>>>;
 
-pub fn new_key_cache() -> KeyCache { Arc::new(RwLock::new(HashMap::new())) }
+pub fn new_key_cache() -> KeyCache {
+    Arc::new(RwLock::new(HashMap::new()))
+}
 
 pub async fn fetch_one<C: HttpClient>(
     seg: Segment,
@@ -69,7 +71,11 @@ pub async fn fetch_one<C: HttpClient>(
     let path = work_dir.join(format!("seg-{:06}.ts", seg.idx.0));
     tokio::fs::write(&path, &plaintext).await?;
     let bytes_written = plaintext.len() as u64;
-    Ok(FetchedSegment { idx: seg.idx, path, bytes_written })
+    Ok(FetchedSegment {
+        idx: seg.idx,
+        path,
+        bytes_written,
+    })
 }
 
 async fn resolve_key<C: HttpClient>(

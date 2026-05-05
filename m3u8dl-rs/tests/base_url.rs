@@ -3,7 +3,9 @@ use proptest::prelude::*;
 use url::Url;
 
 #[allow(clippy::expect_used)] // free-standing helper in tests/*.rs
-fn parse(s: &str) -> Url { Url::parse(s).expect("test url") }
+fn parse(s: &str) -> Url {
+    Url::parse(s).expect("test url")
+}
 
 #[test]
 fn strips_m3u8_filename() {
@@ -42,7 +44,10 @@ fn base_resolves_relative_segment_correctly() {
     let m = parse("https://cdn.example.com/some/path/index.m3u8?h=abc");
     let base = derive_base_url(&m).expect("base");
     let seg = base.join("seg-0.ts?h=def").expect("join");
-    assert_eq!(seg.as_str(), "https://cdn.example.com/some/path/seg-0.ts?h=def");
+    assert_eq!(
+        seg.as_str(),
+        "https://cdn.example.com/some/path/seg-0.ts?h=def"
+    );
 }
 
 #[test]

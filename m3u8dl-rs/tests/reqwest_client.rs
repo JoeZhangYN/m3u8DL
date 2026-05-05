@@ -7,9 +7,11 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[allow(clippy::expect_used)] // helper for #[tokio::test] fns; clippy's allow-expect-in-tests
-                              // doesn't see free-standing helpers in tests/*.rs (only `#[cfg(test)]`)
+// doesn't see free-standing helpers in tests/*.rs (only `#[cfg(test)]`)
 fn make_client(retries: u32) -> ReqwestClient {
-    ReqwestClient::new().expect("client").with_max_retries(retries)
+    ReqwestClient::new()
+        .expect("client")
+        .with_max_retries(retries)
 }
 
 #[tokio::test]

@@ -21,8 +21,17 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
     let http = ReqwestClient::new().expect("client").with_max_retries(0);
     let muxer = FfmpegMuxer::new(PathBuf::from("nonexistent-ffmpeg.exe"));
-    let job = Arc::new(DownloadJob { http, muxer, out_dir, parallelism: 4 });
-    let state = AppState { job, registry: JobRegistry::new(), config: cfg };
+    let job = Arc::new(DownloadJob {
+        http,
+        muxer,
+        out_dir,
+        parallelism: 4,
+    });
+    let state = AppState {
+        job,
+        registry: JobRegistry::new(),
+        config: cfg,
+    };
     let app = router(state);
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
@@ -37,7 +46,11 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
 async fn sse_404_for_unknown_job() {
     let tmp = tempfile::tempdir().expect("tmp");
     let port = spawn_server(tmp.path().to_path_buf()).await;
-    let resp = reqwest::Client::builder().pool_max_idle_per_host(0).http1_only().build().expect("client")
+    let resp = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .http1_only()
+        .build()
+        .expect("client")
         .get(format!("http://127.0.0.1:{port}/events/notarealjob"))
         .send()
         .await
@@ -77,7 +90,9 @@ async fn sse_streams_initial_snapshot_event() {
         .expect("sse send");
     assert_eq!(resp.status(), 200);
     assert_eq!(
-        resp.headers().get("content-type").and_then(|v| v.to_str().ok()),
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
         Some("text/event-stream")
     );
 
@@ -93,8 +108,20 @@ async fn sse_streams_initial_snapshot_event() {
         }
     })
     .await;
-    assert!(read.is_ok(), "timed out waiting for first SSE event; buf so far: {buf:?}");
-    assert!(buf.contains("event: snapshot"), "expected snapshot event, got: {buf:?}");
-    assert!(buf.contains("\"id\":"), "snapshot data missing 'id': {buf:?}");
-    assert!(buf.contains("\"title\":\"sse_test\""), "snapshot title mismatch: {buf:?}");
+    assert!(
+        read.is_ok(),
+        "timed out waiting for first SSE event; buf so far: {buf:?}"
+    );
+    assert!(
+        buf.contains("event: snapshot"),
+        "expected snapshot event, got: {buf:?}"
+    );
+    assert!(
+        buf.contains("\"id\":"),
+        "snapshot data missing 'id': {buf:?}"
+    );
+    assert!(
+        buf.contains("\"title\":\"sse_test\""),
+        "snapshot title mismatch: {buf:?}"
+    );
 }

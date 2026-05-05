@@ -19,7 +19,8 @@ fn leaves_endlist_alone_when_present() {
 #[test]
 fn splits_one_line_blob_at_ext_directives() {
     // DevTools "copy as text" typically preserves spaces between fields, just drops newlines
-    let oneliner = "#EXTM3U #EXT-X-VERSION:3 #EXT-X-TARGETDURATION:6 #EXTINF:5.76,seg0.ts #EXT-X-ENDLIST";
+    let oneliner =
+        "#EXTM3U #EXT-X-VERSION:3 #EXT-X-TARGETDURATION:6 #EXTINF:5.76,seg0.ts #EXT-X-ENDLIST";
     let out = normalize(oneliner);
     assert!(out.contains("\n#EXT-X-VERSION"), "got: {out}");
     assert!(out.contains("\n#EXTINF"), "got: {out}");
@@ -30,7 +31,10 @@ fn splits_one_line_blob_at_ext_directives() {
 fn splits_one_line_blob_before_https_urls() {
     let oneliner = "#EXTM3U #EXTINF:5.76, https://cdn.example.com/seg0.ts #EXT-X-ENDLIST";
     let out = normalize(oneliner);
-    assert!(out.contains("\nhttps://cdn.example.com/seg0.ts"), "got: {out}");
+    assert!(
+        out.contains("\nhttps://cdn.example.com/seg0.ts"),
+        "got: {out}"
+    );
 }
 
 #[test]
@@ -40,7 +44,10 @@ fn does_not_split_when_already_multiline() {
     // line count should be similar, no spurious splits
     let original_lines = already_ok.lines().count();
     let out_lines = out.lines().count();
-    assert!(out_lines >= original_lines, "lost lines: {original_lines} -> {out_lines}");
+    assert!(
+        out_lines >= original_lines,
+        "lost lines: {original_lines} -> {out_lines}"
+    );
 }
 
 #[test]

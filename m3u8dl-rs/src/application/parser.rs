@@ -55,13 +55,19 @@ fn media_to_domain(m: m3u8_rs::MediaPlaylist, base: Option<&Url>) -> Result<Play
             current_encryption = parse_key(k, base)?;
         }
         let encryption = current_encryption.clone();
-        let byte_range = seg.byte_range.map(|r| ByteRange { length: r.length, offset: r.offset });
+        let byte_range = seg.byte_range.map(|r| ByteRange {
+            length: r.length,
+            offset: r.offset,
+        });
         if let Some(map) = seg.map
             && init.is_none()
         {
             init = Some(InitSegment {
                 url: resolve_url(&map.uri, base)?,
-                byte_range: map.byte_range.map(|r| ByteRange { length: r.length, offset: r.offset }),
+                byte_range: map.byte_range.map(|r| ByteRange {
+                    length: r.length,
+                    offset: r.offset,
+                }),
             });
         }
         total_duration += f64::from(seg.duration);
@@ -107,11 +113,16 @@ fn parse_key(k: &m3u8_rs::Key, base: Option<&Url>) -> Result<Encryption> {
 /// number); for Tier 1 we only support explicit IV — segments without IV → Parse error.
 fn parse_iv(iv_str: Option<&str>) -> Result<[u8; 16]> {
     let s = iv_str.ok_or_else(|| {
-        DownloadError::Parse("AES-128 without explicit IV (media-seq fallback not yet implemented)".into())
+        DownloadError::Parse(
+            "AES-128 without explicit IV (media-seq fallback not yet implemented)".into(),
+        )
     })?;
     let s = s.trim_start_matches("0x").trim_start_matches("0X");
     if s.len() != 32 {
-        return Err(DownloadError::Parse(format!("IV length {} != 32 hex chars", s.len())));
+        return Err(DownloadError::Parse(format!(
+            "IV length {} != 32 hex chars",
+            s.len()
+        )));
     }
     let mut out = [0u8; 16];
     for i in 0..16 {
@@ -127,5 +138,6 @@ fn resolve_url(s: &str, base: Option<&Url>) -> Result<Url> {
     }
     let base = base
         .ok_or_else(|| DownloadError::Parse(format!("relative URL '{s}' but no base supplied")))?;
-    base.join(s).map_err(|e| DownloadError::Parse(format!("URL join '{s}': {e}")))
+    base.join(s)
+        .map_err(|e| DownloadError::Parse(format!("URL join '{s}': {e}")))
 }

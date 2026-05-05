@@ -64,5 +64,8 @@ fn unknown_input_preview_truncated_to_80_chars() {
     let msg = err.to_string();
     // preview should not contain all 500 x's
     let xs_in_msg = msg.matches('x').count();
-    assert!(xs_in_msg <= 100, "preview too long: {xs_in_msg} x's in message");
+    assert!(
+        xs_in_msg <= 100,
+        "preview too long: {xs_in_msg} x's in message"
+    );
 }

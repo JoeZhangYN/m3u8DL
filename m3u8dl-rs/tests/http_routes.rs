@@ -22,11 +22,20 @@ use tokio::net::TcpListener;
 async fn spawn_server(out_dir: PathBuf) -> u16 {
     let cfg = Config::default();
     let http = ReqwestClient::new().expect("client").with_max_retries(0);
-    let muxer = m3u8dl_server::adapters::ffmpeg_muxer::FfmpegMuxer::new(
-        PathBuf::from("nonexistent-ffmpeg.exe"),
-    );
-    let job = Arc::new(DownloadJob { http, muxer, out_dir, parallelism: 4 });
-    let state = AppState { job, registry: JobRegistry::new(), config: cfg };
+    let muxer = m3u8dl_server::adapters::ffmpeg_muxer::FfmpegMuxer::new(PathBuf::from(
+        "nonexistent-ffmpeg.exe",
+    ));
+    let job = Arc::new(DownloadJob {
+        http,
+        muxer,
+        out_dir,
+        parallelism: 4,
+    });
+    let state = AppState {
+        job,
+        registry: JobRegistry::new(),
+        config: cfg,
+    };
     let app = router(state);
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind");
     let port = listener.local_addr().expect("local_addr").port();
@@ -39,7 +48,10 @@ async fn spawn_server(out_dir: PathBuf) -> u16 {
 
 #[allow(clippy::expect_used)] // tests/* helper
 fn http_client() -> reqwest::Client {
-    reqwest::Client::builder().timeout(Duration::from_secs(5)).build().expect("client")
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("client")
 }
 
 #[tokio::test]
@@ -48,8 +60,12 @@ async fn ping_returns_ok() {
     let port = spawn_server(tmp.path().to_path_buf()).await;
     let r: Value = http_client()
         .get(format!("http://127.0.0.1:{port}/ping"))
-        .send().await.expect("send")
-        .json().await.expect("json");
+        .send()
+        .await
+        .expect("send")
+        .json()
+        .await
+        .expect("json");
     assert_eq!(r["ok"], true);
     assert_eq!(r["port"], 7787); // Config::default port (informational), not the bind port
     assert_eq!(r["jobs"], 0);
@@ -61,8 +77,12 @@ async fn status_initially_empty() {
     let port = spawn_server(tmp.path().to_path_buf()).await;
     let r: Value = http_client()
         .get(format!("http://127.0.0.1:{port}/status"))
-        .send().await.expect("send")
-        .json().await.expect("json");
+        .send()
+        .await
+        .expect("send")
+        .json()
+        .await
+        .expect("json");
     assert!(r["jobs"].as_array().expect("array").is_empty());
 }
 
@@ -73,7 +93,9 @@ async fn download_rejects_empty_m3u8() {
     let resp = http_client()
         .post(format!("http://127.0.0.1:{port}/download"))
         .json(&serde_json::json!({ "m3u8": "", "title": "x" }))
-        .send().await.expect("send");
+        .send()
+        .await
+        .expect("send");
     assert_eq!(resp.status(), 400);
     let b: Value = resp.json().await.expect("json");
     assert!(b["error"].as_str().expect("err string").contains("empty"));
@@ -90,7 +112,9 @@ async fn download_accepts_valid_returns_job_id() {
             "url": "http://nope/x.m3u8",
             "title": "smoke",
         }))
-        .send().await.expect("send");
+        .send()
+        .await
+        .expect("send");
     assert_eq!(resp.status(), 202);
     let b: Value = resp.json().await.expect("json");
     let jid = b["jobId"].as_str().expect("jobId string");
@@ -116,8 +140,14 @@ async fn download_accepts_client_supplied_headers() {
                 "Cookie":  "session=abc"
             }
         }))
-        .send().await.expect("send");
-    assert_eq!(resp.status(), 202, "client headers in body should not be rejected");
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(
+        resp.status(),
+        202,
+        "client headers in body should not be rejected"
+    );
     let b: Value = resp.json().await.expect("json");
     assert_eq!(b["status"], "queued");
 }
@@ -128,7 +158,9 @@ async fn unknown_job_returns_404() {
     let port = spawn_server(tmp.path().to_path_buf()).await;
     let resp = http_client()
         .get(format!("http://127.0.0.1:{port}/job/deadbeef"))
-        .send().await.expect("send");
+        .send()
+        .await
+        .expect("send");
     assert_eq!(resp.status(), 404);
     let b: Value = resp.json().await.expect("json");
     assert!(b["error"].as_str().expect("err").contains("not found"));
@@ -141,7 +173,9 @@ async fn cors_allows_any_origin() {
     let resp = http_client()
         .get(format!("http://127.0.0.1:{port}/ping"))
         .header("Origin", "https://www.example.com")
-        .send().await.expect("send");
+        .send()
+        .await
+        .expect("send");
     let cors = resp
         .headers()
         .get("access-control-allow-origin")

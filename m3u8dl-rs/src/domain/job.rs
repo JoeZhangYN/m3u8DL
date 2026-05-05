@@ -11,19 +11,27 @@ impl JobId {
         let raw = uuid::Uuid::new_v4().simple().to_string();
         Self(raw[..8].to_string())
     }
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
     /// Wrap a string into a JobId without validation. Used by HTTP routes that get the
     /// id from a path segment — caller is responsible for shape; downstream `registry.get()`
     /// returns None on miss anyway.
-    pub fn from_string(s: String) -> Self { Self(s) }
+    pub fn from_string(s: String) -> Self {
+        Self(s)
+    }
 }
 
 impl Default for JobId {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl std::fmt::Display for JobId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.0) }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 /// Newtype to keep segment indices distinct from arbitrary u32s downstream.
@@ -85,7 +93,12 @@ pub struct Job {
 
 impl Job {
     pub fn queued(id: JobId, title: String) -> Self {
-        Self { id, title, state: JobState::Queued, started_at: chrono::Utc::now() }
+        Self {
+            id,
+            title,
+            state: JobState::Queued,
+            started_at: chrono::Utc::now(),
+        }
     }
 
     /// Apply a state transition. Returns `false` (and leaves state unchanged) if the

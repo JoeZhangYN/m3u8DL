@@ -20,7 +20,11 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     pub fn new(url: Url) -> Self {
-        Self { url, headers: HeaderMap::new(), range: None }
+        Self {
+            url,
+            headers: HeaderMap::new(),
+            range: None,
+        }
     }
     pub fn with_headers(mut self, h: HeaderMap) -> Self {
         self.headers = h;

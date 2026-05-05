@@ -43,12 +43,21 @@ pub fn router(state: AppState) -> Router {
         .route("/download", post(download))
         .route("/job/:id", get(get_job))
         .route("/events/:id", get(crate::http::sse::job_events))
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .with_state(state)
 }
 
 async fn ping(State(s): State<AppState>) -> Json<PingResponse> {
-    Json(PingResponse { ok: true, port: s.config.port, jobs: s.registry.count() })
+    Json(PingResponse {
+        ok: true,
+        port: s.config.port,
+        jobs: s.registry.count(),
+    })
 }
 
 async fn status(State(s): State<AppState>) -> Json<StatusResponse> {
@@ -70,7 +79,12 @@ async fn get_job(
 ) -> Result<Json<JobSnapshot>, (StatusCode, Json<ErrorBody>)> {
     let job_id = JobId::from_string(id);
     let h = s.registry.get(&job_id).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ErrorBody { error: format!("job {job_id} not found") }))
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorBody {
+                error: format!("job {job_id} not found"),
+            }),
+        )
     })?;
     let g = h.job.lock().expect("job mutex poisoned");
     Ok(Json(JobSnapshot::from_job(&g)))
@@ -86,7 +100,14 @@ async fn download(
     // `M3u8Input::detect` is the single point of input classification (incl. empty check).
     let input = match M3u8Input::detect(&body.m3u8) {
         Ok(i) => i,
-        Err(e) => return Err((StatusCode::BAD_REQUEST, Json(ErrorBody { error: e.to_string() }))),
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody {
+                    error: e.to_string(),
+                }),
+            ));
+        }
     };
     let handle = s.registry.register(id.clone(), title.clone());
 
@@ -110,7 +131,9 @@ async fn download(
     } else if let Some(page) = body.page.as_deref()
         && let Ok(page_url) = url::Url::parse(page)
     {
-        if let Ok(origin) = reqwest::header::HeaderValue::from_str(&page_url.origin().ascii_serialization()) {
+        if let Ok(origin) =
+            reqwest::header::HeaderValue::from_str(&page_url.origin().ascii_serialization())
+        {
             headers.insert(reqwest::header::ORIGIN, origin);
         }
         if let Ok(referer) = reqwest::header::HeaderValue::from_str(page) {
@@ -133,14 +156,20 @@ async fn download(
             Ok((output, size_mb)) => JobState::Done { output, size_mb },
             Err(e) => {
                 tracing::error!(job_id = %id_for_task, error = %e, "download job failed");
-                JobState::Failed { error: e.to_string() }
+                JobState::Failed {
+                    error: e.to_string(),
+                }
             }
         };
         registry.set_state(&id_for_task, final_state);
     });
     Ok((
         StatusCode::ACCEPTED,
-        Json(DownloadAccepted { job_id: id.as_str().to_string(), status: "queued", title }),
+        Json(DownloadAccepted {
+            job_id: id.as_str().to_string(),
+            status: "queued",
+            title,
+        }),
     ))
 }
 
@@ -149,6 +178,12 @@ async fn download(
 fn is_allowed_header(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
-        "origin" | "referer" | "cookie" | "user-agent" | "accept" | "accept-language" | "x-forwarded-for"
+        "origin"
+            | "referer"
+            | "cookie"
+            | "user-agent"
+            | "accept"
+            | "accept-language"
+            | "x-forwarded-for"
     )
 }

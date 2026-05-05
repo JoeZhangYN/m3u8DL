@@ -15,9 +15,15 @@ struct CollectingSink {
     events: Mutex<Vec<ProgressEvent>>,
 }
 impl CollectingSink {
-    fn new() -> Self { Self { events: Mutex::new(Vec::new()) } }
+    fn new() -> Self {
+        Self {
+            events: Mutex::new(Vec::new()),
+        }
+    }
     #[allow(clippy::expect_used)] // helper for tests
-    fn snapshot(&self) -> Vec<ProgressEvent> { self.events.lock().expect("lock").clone() }
+    fn snapshot(&self) -> Vec<ProgressEvent> {
+        self.events.lock().expect("lock").clone()
+    }
 }
 impl ProgressSink for CollectingSink {
     #[allow(clippy::expect_used)] // helper for tests
@@ -36,11 +42,26 @@ async fn make_test_segment(path: &Path, duration_secs: u32) {
     let ffmpeg = ffmpeg_path();
     let status = tokio::process::Command::new(&ffmpeg)
         .args([
-            "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", &format!("testsrc=size=320x240:rate=25:duration={duration_secs}"),
-            "-f", "lavfi", "-i", &format!("sine=frequency=440:duration={duration_secs}"),
-            "-c:v", "mpeg2video", "-c:a", "aac", "-b:a", "64k",
-            "-f", "mpegts",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("testsrc=size=320x240:rate=25:duration={duration_secs}"),
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("sine=frequency=440:duration={duration_secs}"),
+            "-c:v",
+            "mpeg2video",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "64k",
+            "-f",
+            "mpegts",
         ])
         .arg(path)
         .status()
@@ -62,10 +83,8 @@ async fn muxes_two_test_segments_into_mp4() {
 
     let muxer = FfmpegMuxer::new(ffmpeg_path());
     let sink = CollectingSink::new();
-    let inputs = OrderedSegments::from_indexed(vec![
-        (SegmentIndex(0), seg0),
-        (SegmentIndex(1), seg1),
-    ]);
+    let inputs =
+        OrderedSegments::from_indexed(vec![(SegmentIndex(0), seg0), (SegmentIndex(1), seg1)]);
     let result = tokio::time::timeout(
         Duration::from_secs(30),
         muxer.mux(&inputs, &out, 2.0, &sink),
@@ -83,7 +102,11 @@ async fn muxes_two_test_segments_into_mp4() {
         ProgressEvent::Merging { pct } => *pct,
         _ => None,
     });
-    assert_eq!(last_pct, Some(100.0), "final event should be 100%, got {last_pct:?}");
+    assert_eq!(
+        last_pct,
+        Some(100.0),
+        "final event should be 100%, got {last_pct:?}"
+    );
 }
 
 #[ignore = "needs ../ffmpeg.exe; run with --ignored"]
@@ -94,6 +117,9 @@ async fn rejects_empty_input_list() {
     let muxer = FfmpegMuxer::new(ffmpeg_path());
     let sink = CollectingSink::new();
     let inputs = OrderedSegments::from_indexed(vec![]);
-    let err = muxer.mux(&inputs, &out, 0.0, &sink).await.expect_err("should reject");
+    let err = muxer
+        .mux(&inputs, &out, 0.0, &sink)
+        .await
+        .expect_err("should reject");
     assert!(err.to_string().contains("no input"), "got: {err}");
 }

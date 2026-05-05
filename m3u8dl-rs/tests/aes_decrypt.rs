@@ -14,7 +14,11 @@ fn round_trip_short_plaintext() {
 
     let enc = Aes128CbcEnc::new(&key.into(), &iv.into());
     let ct = enc.encrypt_padded_vec_mut::<Pkcs7>(plain);
-    assert!(ct.len().is_multiple_of(16), "ciphertext not block-aligned: {}", ct.len());
+    assert!(
+        ct.len().is_multiple_of(16),
+        "ciphertext not block-aligned: {}",
+        ct.len()
+    );
 
     let pt = decrypt(&ct, &key, &iv).expect("decrypt");
     assert_eq!(pt, plain);

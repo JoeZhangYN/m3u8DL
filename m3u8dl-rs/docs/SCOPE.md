@@ -27,6 +27,8 @@
 - **DevTools 复制压一行**自动正常化（在每个 `#EXT` / `https?://` 前补 `\n`）
 - **缺 `#EXT-X-ENDLIST`** 自动补全（避免被识别为直播流）
 
+<!-- retry timings (250→500→1000→2000ms exponential) SOT'd in m3u8dl-rs/src/adapters/reqwest_client.rs::ReqwestClient::fetch_bytes; sync this paragraph if those change. -->
+
 ### 网络
 - HTTP / HTTPS（rustls，免装 OpenSSL）
 - **零配置 headers** — `capture.user.js` 自动从播放页 `location` 推 `Origin` / `Referer`，POST 时透传给 server；任何 HLS 站无需改代码

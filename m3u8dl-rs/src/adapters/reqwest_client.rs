@@ -30,7 +30,10 @@ impl ReqwestClient {
             .connect_timeout(Duration::from_secs(10))
             .pool_idle_timeout(Some(Duration::from_secs(60)));
 
-        match std::env::var("M3U8DL_PROXY").ok().map(|s| s.trim().to_string()) {
+        match std::env::var("M3U8DL_PROXY")
+            .ok()
+            .map(|s| s.trim().to_string())
+        {
             Some(v) if v.eq_ignore_ascii_case("none") || v.is_empty() => {
                 tracing::info!("proxy: disabled via M3U8DL_PROXY={}", v);
                 builder = builder.no_proxy();
@@ -48,14 +51,19 @@ impl ReqwestClient {
                         tracing::info!("proxy: system proxy {url}");
                         builder = builder.no_proxy().proxy(proxy);
                     }
-                    Err(e) => tracing::warn!("proxy: system proxy {url} parse failed ({e}), going direct"),
+                    Err(e) => {
+                        tracing::warn!("proxy: system proxy {url} parse failed ({e}), going direct")
+                    }
                 },
                 None => tracing::info!("proxy: none (no system proxy, no M3U8DL_PROXY)"),
             },
         }
 
         let client = builder.build()?;
-        Ok(Self { client, max_retries: 3 })
+        Ok(Self {
+            client,
+            max_retries: 3,
+        })
     }
 
     /// Override the retry count (default 3). Useful for tests.
@@ -65,7 +73,10 @@ impl ReqwestClient {
     }
 
     async fn fetch_once(&self, req: &HttpRequest) -> Result<Bytes> {
-        let mut builder = self.client.get(req.url.clone()).headers(req.headers.clone());
+        let mut builder = self
+            .client
+            .get(req.url.clone())
+            .headers(req.headers.clone());
         if let Some(r) = req.range {
             builder = builder.header("Range", format!("bytes={}-{}", r.start, r.end));
         }
@@ -76,6 +87,8 @@ impl ReqwestClient {
 
 impl HttpClient for ReqwestClient {
     async fn fetch_bytes(&self, req: HttpRequest) -> Result<Bytes> {
+        // SOT for retry backoff timings (250 → 500 → 1000 → 2000ms cap, max_retries=3 attempts).
+        // Synced doc copies: README.md "Q&A" / "✨ 特性" + m3u8dl-rs/docs/SCOPE.md "网络". Update those if changed.
         let mut backoff_ms = 250u64;
         let mut attempt = 0u32;
         loop {

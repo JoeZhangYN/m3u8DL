@@ -89,13 +89,32 @@ impl JobSnapshot {
     pub fn from_job(job: &Job) -> Self {
         let (state_str, success, output, size_mb, error, progress) = match &job.state {
             JobState::Queued => ("Queued", None, None, None, None, None),
-            JobState::Parsing => ("Running", None, None, None, None, Some(ProgressDetail::Parsing)),
+            JobState::Parsing => (
+                "Running",
+                None,
+                None,
+                None,
+                None,
+                Some(ProgressDetail::Parsing),
+            ),
             JobState::Downloading { done, total, bytes } => (
-                "Running", None, None, None, None,
-                Some(ProgressDetail::Downloading { done: *done, total: *total, bytes: *bytes }),
+                "Running",
+                None,
+                None,
+                None,
+                None,
+                Some(ProgressDetail::Downloading {
+                    done: *done,
+                    total: *total,
+                    bytes: *bytes,
+                }),
             ),
             JobState::Merging { ffmpeg_pct } => (
-                "Running", None, None, None, None,
+                "Running",
+                None,
+                None,
+                None,
+                None,
                 Some(ProgressDetail::Merging { pct: *ffmpeg_pct }),
             ),
             JobState::Done { output, size_mb } => (
@@ -107,7 +126,12 @@ impl JobSnapshot {
                 None,
             ),
             JobState::Failed { error } => (
-                "Completed", Some(false), None, None, Some(error.clone()), None,
+                "Completed",
+                Some(false),
+                None,
+                None,
+                Some(error.clone()),
+                None,
             ),
         };
         Self {

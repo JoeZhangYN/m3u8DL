@@ -21,9 +21,15 @@ impl OrderedSegments {
         v.sort_by_key(|(idx, _)| *idx);
         Self(v.into_iter().map(|(_, p)| p).collect())
     }
-    pub fn paths(&self) -> &[PathBuf] { &self.0 }
-    pub fn is_empty(&self) -> bool { self.0.is_empty() }
-    pub fn len(&self) -> usize { self.0.len() }
+    pub fn paths(&self) -> &[PathBuf] {
+        &self.0
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[allow(async_fn_in_trait)] // generic over `<M: Muxer>` in the orchestrator, no `dyn`

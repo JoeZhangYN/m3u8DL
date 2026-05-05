@@ -25,7 +25,9 @@ impl BroadcastSink {
         Self { sender, job }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<ProgressEvent> { self.sender.subscribe() }
+    pub fn subscribe(&self) -> broadcast::Receiver<ProgressEvent> {
+        self.sender.subscribe()
+    }
 }
 
 impl ProgressSink for BroadcastSink {

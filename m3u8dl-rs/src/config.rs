@@ -13,7 +13,7 @@
 //! Anti-hotlink `Origin` / `Referer` are NOT hardcoded — `capture.user.js` derives them
 //! from `location.href` of the playing page and sends them in the POST body.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
@@ -44,28 +44,74 @@ impl Default for Config {
 }
 
 fn env_or<T: FromStr>(name: &str, default: T) -> T {
-    std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn env_or_str(name: &str, default: &str) -> String {
-    std::env::var(name).ok().filter(|s| !s.is_empty()).unwrap_or_else(|| default.to_string())
+    std::env::var(name)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| default.to_string())
 }
 
 #[cfg(windows)]
-const fn default_ffmpeg_name() -> &'static str { "ffmpeg.exe" }
+const fn default_ffmpeg_name() -> &'static str {
+    "ffmpeg.exe"
+}
 #[cfg(not(windows))]
-const fn default_ffmpeg_name() -> &'static str { "ffmpeg" }
+const fn default_ffmpeg_name() -> &'static str {
+    "ffmpeg"
+}
+
+/// Pure decision: `Some(downloads)` → append `m3u8dl/` subfolder; `None` → use the provided fallback.
+/// No IO, no env reads, no logging — testable by direct injection.
+fn default_out_dir_from(downloads: Option<PathBuf>, fallback: &Path) -> String {
+    match downloads {
+        Some(p) => p.join("m3u8dl").to_string_lossy().into_owned(),
+        None => fallback.to_string_lossy().into_owned(),
+    }
+}
 
 /// Per-user Downloads directory plus dedicated `m3u8dl/` subfolder. `dirs::download_dir`
 /// resolves to the user's actual configured folder (Windows: `SHGetKnownFolderPath(FOLDERID_Downloads)`,
 /// honoring relocation off `%USERPROFILE%`; Linux: `XDG_DOWNLOAD_DIR`; macOS: NSDownloadsDirectory).
 /// The `m3u8dl/` suffix isolates downloader output from the user's other Downloads (browsers, etc.).
-/// Falls back to bare `./downloads` only when no Downloads dir is registered (very rare;
-/// stripped-down profiles or sandboxed runners).
+///
+/// Effects: calls `dirs::download_dir()` + `std::env::current_dir()`; emits `tracing::warn!` on fallback.
+/// On `None` (very rare; stripped-down profiles or sandboxed runners), anchors fallback to `<cwd>/downloads`
+/// (absolute) so a service started from different cwd in different sessions still writes to the same place.
+/// If `current_dir()` itself fails (cwd deleted / no permission), bare `./downloads` is the last resort.
 fn default_out_dir() -> String {
-    dirs::download_dir()
-        .map(|p| p.join("m3u8dl").to_string_lossy().into_owned())
-        .unwrap_or_else(|| "./downloads".to_string())
+    if let Some(p) = dirs::download_dir() {
+        return default_out_dir_from(Some(p), Path::new("./downloads"));
+    }
+    let cwd_fallback = std::env::current_dir().map(|c| c.join("downloads"));
+    match cwd_fallback {
+        Ok(abs) => {
+            let resolved = default_out_dir_from(None, &abs);
+            tracing::warn!(
+                event = "out_dir_fallback",
+                reason = "no_downloads_dir_registered",
+                path = %resolved,
+                "dirs::download_dir() returned None; anchored fallback to cwd"
+            );
+            resolved
+        }
+        Err(e) => {
+            let resolved = default_out_dir_from(None, Path::new("./downloads"));
+            tracing::warn!(
+                event = "out_dir_fallback",
+                reason = "no_downloads_dir_and_cwd_unavailable",
+                path = %resolved,
+                error = %e,
+                "dirs::download_dir() returned None and current_dir() failed; using bare relative ./downloads"
+            );
+            resolved
+        }
+    }
 }
 
 #[allow(clippy::expect_used)] // static literal headers — if these don't parse, the source is broken
@@ -80,7 +126,9 @@ static DEFAULT_HEADERS: LazyLock<HeaderMap> = LazyLock::new(|| {
     h.insert("Accept", "*/*".parse().expect("Accept literal valid"));
     h.insert(
         "Accept-Language",
-        "zh-CN,zh;q=0.9,en;q=0.8".parse().expect("Accept-Language literal valid"),
+        "zh-CN,zh;q=0.9,en;q=0.8"
+            .parse()
+            .expect("Accept-Language literal valid"),
     );
     h
 });

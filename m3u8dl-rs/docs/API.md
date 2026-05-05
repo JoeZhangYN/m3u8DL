@@ -1,3 +1,5 @@
+<!-- non-authoritative; port (`7787`) SOT'd in m3u8dl-rs/src/config.rs::Config::default; JSON response shapes SOT'd in m3u8dl-rs/src/http/dto.rs. Keep this in sync if those change. -->
+
 # HTTP API
 
 监听 `127.0.0.1:7787`（不绑公网 IP）。CORS `Access-Control-Allow-Origin: *`（仅 localhost 监听，无外部攻击面）。

@@ -27,7 +27,9 @@ pub struct JobRegistry {
 }
 
 impl JobRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Allocate a new job slot. The returned `JobHandle.sink` is wired to update
     /// `JobHandle.job.state` on every `emit()` (so polling clients see the same detail
@@ -44,7 +46,9 @@ impl JobRegistry {
         self.inner.get(id).map(|r| r.clone())
     }
 
-    pub fn count(&self) -> usize { self.inner.len() }
+    pub fn count(&self) -> usize {
+        self.inner.len()
+    }
 
     pub fn ids(&self) -> Vec<JobId> {
         self.inner.iter().map(|r| r.key().clone()).collect()

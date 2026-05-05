@@ -55,8 +55,15 @@ fn parses_plain_media_with_three_segments() {
     };
     assert_eq!(media.segments.len(), 3);
     assert_eq!(media.target_duration, 6);
-    assert!((media.total_duration - 17.28).abs() < 0.01, "got {}", media.total_duration);
-    assert_eq!(media.segments[0].url, Url::parse("https://example.com/v/seg-0.ts").expect("uri"));
+    assert!(
+        (media.total_duration - 17.28).abs() < 0.01,
+        "got {}",
+        media.total_duration
+    );
+    assert_eq!(
+        media.segments[0].url,
+        Url::parse("https://example.com/v/seg-0.ts").expect("uri")
+    );
     assert!(matches!(media.segments[0].encryption, Encryption::None));
     assert_eq!(media.segments[2].idx.0, 2);
 }
@@ -77,7 +84,10 @@ fn parses_aes128_key_carries_to_all_segments() {
         let Encryption::Aes128Cbc { key_uri, iv } = &seg.encryption else {
             panic!("seg {:?}: expected Aes128Cbc", seg.idx);
         };
-        assert_eq!(key_uri, &Url::parse("https://example.com/v/key.bin").expect("key uri"));
+        assert_eq!(
+            key_uri,
+            &Url::parse("https://example.com/v/key.bin").expect("key uri")
+        );
         assert_eq!(iv, &expected_iv);
     }
 }
@@ -100,7 +110,10 @@ fn parses_init_segment_from_ext_x_map() {
         panic!("expected Media");
     };
     let init = media.init.as_ref().expect("init segment");
-    assert_eq!(init.url, Url::parse("https://example.com/v/init.mp4").expect("init uri"));
+    assert_eq!(
+        init.url,
+        Url::parse("https://example.com/v/init.mp4").expect("init uri")
+    );
 }
 
 #[test]

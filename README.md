@@ -10,6 +10,7 @@
 ## ✨ 特性
 
 - 浏览器一键抓取 → 自动 POST 到本机 `127.0.0.1:7787`
+<!-- retry timings (250→2000ms) SOT'd in m3u8dl-rs/src/adapters/reqwest_client.rs::ReqwestClient::fetch_bytes -->
 - **并行分片下载**（默认 16 线程）+ 失败重试（指数退避 250→2000ms × 4）
 - **AES-128-CBC 解密**（HLS 标准加密；key 自动 fetch + 缓存）
 - **master playlist** 自动选最高码率
